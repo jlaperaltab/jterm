@@ -1,0 +1,140 @@
+<div align="center">
+
+# jTerm
+
+**Un terminal para macOS hecho a mano: SSH, AWS, archivos y comandos guardados en una sola ventana.**
+
+[![Última versión](https://img.shields.io/github/v/release/jlaperaltab/jterm?label=versi%C3%B3n&color=5c9eff&style=flat-square)](https://github.com/jlaperaltab/jterm/releases/latest)
+[![Descargas](https://img.shields.io/github/downloads/jlaperaltab/jterm/total?label=descargas&color=4cc38a&style=flat-square)](https://github.com/jlaperaltab/jterm/releases)
+![macOS 13+](https://img.shields.io/badge/macOS-13%2B-lightgrey?style=flat-square&logo=apple)
+![Swift 5.9](https://img.shields.io/badge/Swift-5.9-F05138?style=flat-square&logo=swift&logoColor=white)
+![Apple Silicon + Intel](https://img.shields.io/badge/Apple%20Silicon%20%2B%20Intel-universal-8a8f98?style=flat-square)
+
+[**Descargar**](https://github.com/jlaperaltab/jterm/releases/latest) · [Funciones](#-funciones) · [Instalación](#-instalación) · [Compilar](#-compilar-desde-el-código) · [Publicar versiones](#-publicar-una-versión)
+
+</div>
+
+---
+
+## ✨ Funciones
+
+**Terminal**
+- Pestañas con terminales locales y conexiones SSH, con barra lateral de servidores.
+- Emulación completa basada en [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm): colores de 256 y truecolor, ratón para `tmux`, `vim` y `htop`, pantalla alternativa (`nano`, `less`…).
+- Temas de color (jTerm, Dracula, Nord, Tokyo Night, One Dark, Gruvbox, Monokai, Solarized…), fuentes monoespaciadas, tamaño, cursor y líneas de historial configurables.
+- **Option como Meta** para saltar palabras, y **AltGr** que sigue escribiendo `@`, `|`, `#` o `~` en teclados español y latino.
+
+**Servidores y AWS**
+- Servidores guardados con usuario, puerto y llave; las contraseñas viven en el **Keychain** de macOS, nunca en un archivo.
+- Cuentas AWS con listado de instancias EC2 y conexión mediante EC2 Instance Connect.
+- **Visor de logs de CloudWatch**: elige grupo y rango, filtra con patrones, filtra por prefijo de stream y activa **Seguir** para ver los eventos nuevos en vivo.
+
+**Archivos**
+- Gestor de archivos de dos paneles (tu Mac ↔ el servidor) sobre SFTP, con transferencias, renombrar, eliminar y confirmaciones.
+
+**Comandos guardados**
+- Una lista de comandos a un atajo de distancia (`⇧⌘K`) para pegarlos o ejecutarlos en la consola activa.
+
+**Tus datos, contigo**
+- **Sincronización con iCloud** entre tus Macs: conexiones, comandos y ajustes viajan **cifrados** con una contraseña que solo tú conoces.
+- Exportar e importar servidores y cuentas, opcionalmente con secretos cifrados.
+
+**Se actualiza solo**
+- *jTerm ▸ Buscar actualizaciones…* consulta los releases de este repositorio, verifica el SHA-256 del DMG, instala la nueva versión y se reabre.
+- Revisa en silencio al abrir, como máximo una vez al día.
+
+## ⌨️ Atajos
+
+| Atajo | Acción |
+| --- | --- |
+| `⌘T` / `⌘W` | Nueva pestaña / cerrar pestaña |
+| `⇧⌘]` / `⇧⌘[` | Pestaña siguiente / anterior |
+| `⌘1` … `⌘9` | Ir a la pestaña N |
+| `⌘B` | Mostrar u ocultar la barra lateral |
+| `⇧⌘K` | Lista de comandos guardados |
+| `⌘,` | Ajustes |
+
+## 📦 Instalación
+
+1. Descarga el último `jTerm-X.Y.Z.dmg` desde [Releases](https://github.com/jlaperaltab/jterm/releases/latest).
+2. Ábrelo y arrastra **jTerm** a **Aplicaciones**.
+3. La primera vez, macOS dirá que no puede verificar la app, porque no está notarizada por Apple. Es normal. Para abrirla:
+   - **macOS 15 o posterior:** *Ajustes del Sistema ▸ Privacidad y seguridad* ▸ *Abrir de todos modos*.
+   - **macOS 13 o 14:** clic derecho sobre jTerm ▸ *Abrir* ▸ *Abrir*.
+   - **O desde Terminal:**
+     ```sh
+     xattr -dr com.apple.quarantine /Applications/jTerm.app
+     ```
+
+Solo hace falta la primera vez: las actualizaciones posteriores se instalan desde la propia app.
+
+**Requisitos:** macOS 13 o superior, Apple Silicon o Intel.
+
+**Dónde se guardan tus datos:** en `~/Library/Application Support/jTerm`. Las contraseñas y claves secretas van al Keychain de macOS.
+
+## 🛠 Compilar desde el código
+
+Solo necesitas las Command Line Tools de Xcode (`xcode-select --install`); no hace falta Xcode.
+
+```sh
+git clone https://github.com/jlaperaltab/jterm.git
+cd jterm
+
+swift run                              # ejecutar en modo desarrollo
+VERSION=0.2.0 ./build_app.sh           # empaqueta build/jTerm.app
+```
+
+| Variable | Efecto |
+| --- | --- |
+| `VERSION` | Número de versión de la app (también se usa para comparar actualizaciones). |
+| `UNIVERSAL=1` | Binario para Apple Silicon e Intel. |
+| `ADHOC=1` | Firma ad-hoc para compartir con otros Macs. |
+| `GITHUB_REPO` | `usuario/repo` donde el actualizador busca releases (por defecto `jotaele/jterm`). |
+
+> Si ejecutas con `swift run`, la app no tiene `Info.plist` y *Buscar actualizaciones* avisará que solo funciona desde la app empaquetada.
+
+Para que macOS no vuelva a pedir la clave del Keychain en cada recompilación local, crea una vez un certificado de firma propio:
+
+```sh
+tools/make_signing_cert.sh
+```
+
+## 🚀 Publicar una versión
+
+Necesitas la [CLI de GitHub](https://cli.github.com) con la sesión iniciada (`gh auth login`).
+
+```sh
+GITHUB_REPO=usuario/repo ./release.sh 0.2.0
+```
+
+El script compila el DMG universal, genera su `.sha256` y crea el release `v0.2.0` con ambos archivos. Los nombres deben ser siempre `jTerm-<versión>.dmg` y `jTerm-<versión>.dmg.sha256`, porque es lo que el actualizador espera.
+
+### Cómo funciona la actualización
+
+```
+jTerm ──► github.com/<repo>/releases/latest   (redirect → tag vX.Y.Z)
+      ──► descarga jTerm-X.Y.Z.dmg + .sha256
+      ──► verifica SHA-256 y que sea cl.jotaele.jterm
+      ──► copia la app nueva junto a la actual
+      ──► script auxiliar: espera el cierre, intercambia y reabre
+```
+
+- No usa la API de GitHub, así que no se topa con el límite de consultas en redes compartidas.
+- Si el hash no coincide o falta el `.sha256`, no instala nada.
+- La firma lleva un requisito fijo (`identifier "cl.jotaele.jterm"`) para que el Keychain reconozca cada versión como la misma app.
+
+## 🗂 Estructura
+
+```
+Sources/jTerm/     Código de la app (AppKit, sin dependencias salvo SwiftTerm)
+Vendor/SwiftTerm/  SwiftTerm con parches de jTerm (ver JTERM_PATCH.md)
+Resources/         Icono de la app
+tools/             Generadores de icono, fondo del DMG y certificado de firma
+build_app.sh       Compila y empaqueta jTerm.app
+make_dmg.sh        Genera el DMG para compartir
+release.sh         Compila el DMG y lo publica como release de GitHub
+```
+
+## 🙏 Créditos
+
+- [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) de Miguel de Icaza, bajo licencia MIT, incluido en `Vendor/` con los cambios descritos en [`JTERM_PATCH.md`](Vendor/SwiftTerm/JTERM_PATCH.md).
