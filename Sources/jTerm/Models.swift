@@ -17,36 +17,86 @@ struct Server: Identifiable, Codable, Hashable {
     var keyPath = ""          // ruta a la llave privada (auth == .key)
 }
 
-/// Guarda secretos (contraseña / passphrase) en el Keychain de macOS.
+/// Guarda secretos (contraseña / passphrase / clave secreta AWS) en el Keychain de macOS.
+///
+/// Todos los secretos viven en UN solo elemento del Keychain (un JSON {id: secreto}). Antes había uno por servidor y cada
+/// elemento tiene su propia lista de permisos, así que macOS pedía la clave una vez por elemento tras cada actualización
+/// (3 servidores = 3 avisos). Con un solo elemento es un único aviso. Los elementos antiguos se migran al usarlos.
 enum Keychain {
     private static let service = "cl.enovus.terminal.servers"
+    private static let vaultAccount = "vault"
+    private static let lock = NSLock()
+    private static var vault: [String: String]?
+
+    private static func base(_ account: String) -> [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
+    }
+
+    /// Lee el elemento único (una vez por ejecución). Debe llamarse con `lock` tomado.
+    private static func loadVault() -> (dict: [String: String]?, status: OSStatus) {
+        if let v = vault { return (v, errSecSuccess) }
+        var q = base(vaultAccount)
+        q[kSecReturnData as String] = true
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
+        var out: AnyObject?
+        let st = SecItemCopyMatching(q as CFDictionary, &out)
+        switch st {
+        case errSecSuccess:
+            guard let data = out as? Data, let d = try? JSONDecoder().decode([String: String].self, from: data) else {
+                return (nil, errSecDecode)       // no se pisa un elemento que no se puede leer
+            }
+            vault = d; return (d, st)
+        case errSecItemNotFound:
+            vault = [:]; return ([:], errSecSuccess)
+        default:
+            return (nil, st)                     // permiso denegado, llavero bloqueado… se reintenta la próxima vez
+        }
+    }
+
+    /// Guarda el elemento único. Debe llamarse con `lock` tomado.
+    @discardableResult
+    private static func persist() -> Bool {
+        guard let v = vault, let data = try? JSONEncoder().encode(v) else { return false }
+        SecItemDelete(base(vaultAccount) as CFDictionary)
+        var item = base(vaultAccount)
+        item[kSecValueData as String] = data
+        let st = SecItemAdd(item as CFDictionary, nil)
+        if st != errSecSuccess { NSLog("jTerm: no se pudo guardar en el Keychain (\(st))") }
+        return st == errSecSuccess
+    }
+
+    /// Lee un elemento del formato antiguo (uno por servidor).
+    private static func legacyRead(_ id: String) -> (secret: String?, status: OSStatus) {
+        var q = base(id)
+        q[kSecReturnData as String] = true
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
+        var out: AnyObject?
+        let st = SecItemCopyMatching(q as CFDictionary, &out)
+        guard st == errSecSuccess, let data = out as? Data else { return (nil, st) }
+        return (String(data: data, encoding: .utf8), st)
+    }
 
     static func set(_ secret: String, for id: UUID) {
-        let base: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: id.uuidString,
-        ]
-        SecItemDelete(base as CFDictionary)
-        guard !secret.isEmpty else { return }
-        var item = base
-        item[kSecValueData as String] = Data(secret.utf8)
-        SecItemAdd(item as CFDictionary, nil)
+        lock.lock(); defer { lock.unlock() }
+        let key = id.uuidString
+        guard loadVault().dict != nil else { NSLog("jTerm: Keychain no disponible; no se guardó el secreto"); return }
+        if secret.isEmpty { vault?[key] = nil } else { vault?[key] = secret }
+        if persist() { SecItemDelete(base(key) as CFDictionary) }      // el elemento antiguo (si lo hay) ya no hace falta
     }
 
     /// Devuelve el secreto y el OSStatus (errSecItemNotFound = no hay secreto guardado).
     static func read(_ id: UUID) -> (secret: String?, status: OSStatus) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: id.uuidString,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var out: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &out)
-        guard status == errSecSuccess, let data = out as? Data else { return (nil, status) }
-        return (String(data: data, encoding: .utf8), status)
+        lock.lock(); defer { lock.unlock() }
+        let key = id.uuidString
+        let (d, st) = loadVault()
+        guard let d else { return (nil, st) }
+        if let s = d[key] { return (s, errSecSuccess) }
+        // ¿Quedó guardado en el formato antiguo? Se migra al elemento único.
+        let old = legacyRead(key)
+        guard let s = old.secret else { return (nil, old.status) }
+        vault?[key] = s
+        if persist() { SecItemDelete(base(key) as CFDictionary) }
+        return (s, errSecSuccess)
     }
 
     static func get(_ id: UUID) -> String? { read(id).secret }
