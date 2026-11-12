@@ -12,3 +12,7 @@ desplazamiento copiaban y limpiaban una sola columna, dejando restos de texto al
   `resizeThrottle` (0,12 s) mientras la ventana se redimensiona; el primero se aplica al instante y el tamaño final
   siempre se aplica. Evita que programas de pantalla completa (nano, vim…) redibujen decenas de veces por segundo
   y parpadeen al arrastrar el borde de la ventana.
+
+- `Mac/MacTerminalView.swift` (`keyDown`): con "Option como Meta" activo, Option+tecla se envía al sistema (no como ESC+tecla) cuando
+  la distribución produce un carácter ASCII (AltGr en teclado español/latino: Option+2 → @, Option+1 → |, Option+3 → #, Option+` → [ …)
+  o una tecla muerta de símbolo (Option+ñ → ~). Option+letra en US sigue siendo Meta (ESC+letra), y Option+←/→ salta palabras.

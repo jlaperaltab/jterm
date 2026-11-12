@@ -133,8 +133,8 @@ final class ThemePreview: NSView {
         text.maximumNumberOfLines = 0; text.isSelectable = false
         addSubview(text)
         NSLayoutConstraint.activate([
-            text.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14), text.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-            text.topAnchor.constraint(equalTo: topAnchor, constant: 12), text.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
+            text.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 18), text.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -18),
+            text.topAnchor.constraint(equalTo: topAnchor, constant: 16), text.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -16),
         ])
         NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: Settings.didChange, object: nil)
         refresh()
@@ -236,6 +236,7 @@ final class SettingsWindow: NSObject {
                          styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                          backing: .buffered, defer: false)
         w.title = "Ajustes"
+        w.titleVisibility = .hidden   // si no, "Ajustes" se solapa con el título de cada página
         w.appearance = NSAppearance(named: .darkAqua)
         w.titlebarAppearsTransparent = true
         w.backgroundColor = Theme.bg
@@ -261,11 +262,11 @@ final class SettingsWindow: NSObject {
         NSLayoutConstraint.activate([
             side.leadingAnchor.constraint(equalTo: root.leadingAnchor), side.topAnchor.constraint(equalTo: root.topAnchor),
             side.bottomAnchor.constraint(equalTo: root.bottomAnchor), side.widthAnchor.constraint(equalToConstant: 190),
-            list.topAnchor.constraint(equalTo: side.topAnchor, constant: 52),
+            list.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor, constant: 26),
             list.leadingAnchor.constraint(equalTo: side.leadingAnchor, constant: 10),
             list.trailingAnchor.constraint(equalTo: side.trailingAnchor, constant: -10),
             scroll.leadingAnchor.constraint(equalTo: side.trailingAnchor), scroll.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            scroll.topAnchor.constraint(equalTo: root.topAnchor), scroll.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+            scroll.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor), scroll.bottomAnchor.constraint(equalTo: root.bottomAnchor),
         ])
 
         scroll.drawsBackground = false; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true
@@ -280,7 +281,7 @@ final class SettingsWindow: NSObject {
             doc.topAnchor.constraint(equalTo: clip.topAnchor),
             pageStack.leadingAnchor.constraint(equalTo: doc.leadingAnchor, constant: 30),
             pageStack.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -30),
-            pageStack.topAnchor.constraint(equalTo: doc.topAnchor, constant: 44),
+            pageStack.topAnchor.constraint(equalTo: doc.topAnchor, constant: 26),
             pageStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -30),
         ])
         window = w
@@ -343,6 +344,15 @@ final class SettingsWindow: NSObject {
         return v
     }
 
+    /// Un NSTextField con varias líneas calcula mal su altura dentro de un NSStackView (la fila queda más baja que el texto
+    /// y los márgenes "desaparecen"). Se mide el texto con el ancho real y se fija esa altura.
+    private func fixHeight(_ label: NSTextField, width: CGFloat) {
+        let r = (label.stringValue as NSString).boundingRect(
+            with: NSSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: label.font ?? .systemFont(ofSize: 11)])
+        label.heightAnchor.constraint(equalToConstant: ceil(r.height) + 2).isActive = true
+    }
+
     private func row(_ title: String, _ detail: String? = nil, _ control: NSView) -> NSView {
         let t = NSTextField(labelWithString: title)
         t.font = .systemFont(ofSize: 13); t.textColor = .white
@@ -353,15 +363,17 @@ final class SettingsWindow: NSObject {
             d.maximumNumberOfLines = 0; d.preferredMaxLayoutWidth = 270
             d.translatesAutoresizingMaskIntoConstraints = false
             d.widthAnchor.constraint(equalToConstant: 270).isActive = true
+            fixHeight(d, width: 270)
             lefts.append(d)
         }
-        let left = NSStackView(views: lefts); left.orientation = .vertical; left.alignment = .leading; left.spacing = 2
+        let left = NSStackView(views: lefts); left.orientation = .vertical; left.alignment = .leading; left.spacing = 4
         left.setContentHuggingPriority(.defaultLow, for: .horizontal)
         control.setContentHuggingPriority(.required, for: .horizontal)
         control.setContentCompressionResistancePriority(.required, for: .horizontal)
         let r = NSStackView(views: [left, control]); r.spacing = 16; r.alignment = .centerY
         r.distribution = .fill
-        r.edgeInsets = NSEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
+        // con descripción de varias líneas hace falta más aire abajo, o el texto se ve pegado a la línea divisoria
+        r.edgeInsets = NSEdgeInsets(top: 16, left: 20, bottom: detail == nil ? 16 : 22, right: 20)
         return r
     }
 
@@ -373,9 +385,10 @@ final class SettingsWindow: NSObject {
         d.preferredMaxLayoutWidth = 500
         d.translatesAutoresizingMaskIntoConstraints = false
         d.widthAnchor.constraint(equalToConstant: 500).isActive = true
+        fixHeight(d, width: 500)
         let v = NSStackView(views: [t, d, control]); v.orientation = .vertical; v.alignment = .leading; v.spacing = 4
         v.setCustomSpacing(10, after: d)
-        v.edgeInsets = NSEdgeInsets(top: 12, left: 14, bottom: 14, right: 14)
+        v.edgeInsets = NSEdgeInsets(top: 16, left: 20, bottom: 22, right: 20)
         return v
     }
 
@@ -567,7 +580,7 @@ final class SettingsWindow: NSObject {
         let none = action("Ninguna") { [weak self] in self?.s.awsRegions = []; self?.select(4) }
         let gridBox = NSStackView(views: [grid, NSStackView(views: [all, none])])
         gridBox.orientation = .vertical; gridBox.alignment = .leading; gridBox.spacing = 12
-        gridBox.edgeInsets = NSEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
+        gridBox.edgeInsets = NSEdgeInsets(top: 16, left: 20, bottom: 16, right: 20)
         (gridBox.arrangedSubviews[1] as? NSStackView)?.spacing = 8
 
         return [

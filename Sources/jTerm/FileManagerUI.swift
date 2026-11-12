@@ -622,7 +622,7 @@ final class FileTab: Tab {
         session?.close(); session = nil
         AppState.shared.onChange?()
         view.showConnecting("Conectando…")
-        Task {
+        Task { [self] in
             do {
                 let target = try await provider()
                 await MainActor.run { self.title = "Archivos · \(target.title)"; AppState.shared.onChange?() }

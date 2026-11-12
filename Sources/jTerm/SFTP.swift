@@ -129,7 +129,8 @@ final class SFTPSession {
         p.standardInput = FileHandle.nullDevice; p.standardOutput = FileHandle.nullDevice; p.standardError = masterErr
         p.terminationHandler = { [weak self] _ in
             guard let self, !self.closed else { return }
-            DispatchQueue.main.async { self.onDisconnect?() }
+            nonisolated(unsafe) let session = self   // solo se toca en el hilo principal
+            DispatchQueue.main.async { session.onDisconnect?() }
         }
         try p.run()
         master = p

@@ -150,6 +150,11 @@ final class PillButton: NSButton {
         widthAnchor.constraint(greaterThanOrEqualToConstant: 92).isActive = true
     }
     required init?(coder: NSCoder) { fatalError() }
+    /// Aire a los lados del texto para que no quede pegado al borde del botón.
+    override var intrinsicContentSize: NSSize {
+        let base = super.intrinsicContentSize
+        return NSSize(width: base.width + 36, height: base.height)
+    }
 }
 
 // MARK: - Editor de servidor (hoja modal)

@@ -99,10 +99,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             v.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(v)
             NSLayoutConstraint.activate([
-                v.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
+                v.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 14),
                 v.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-                v.topAnchor.constraint(equalTo: container.topAnchor, constant: 4),
-                v.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                v.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
+                v.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -6),
             ])
             shown = tab
         }

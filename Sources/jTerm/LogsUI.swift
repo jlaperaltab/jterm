@@ -128,7 +128,7 @@ enum LogsMode: String { case formatted = "fmt", text }
 
 
 final class LogsView: NSView {
-    static let maxEvents = 2000        // eventos que carga una búsqueda
+    nonisolated static let maxEvents = 2000        // eventos que carga una búsqueda
     private static let hardCap = 5000  // al seguir, se descartan los más antiguos
 
     private let accountId: String
@@ -312,7 +312,7 @@ final class LogsView: NSView {
                     all += r.groups; token = r.nextToken; pages += 1
                 } while token != nil && pages < 40
                 let sorted = all.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-                await MainActor.run {
+                await MainActor.run { [weak self] in
                     guard let self, region == self.region else { return }
                     self.groups = sorted; self.groupsLoading = false
                     self.picker.update(groups: sorted, loading: false)
@@ -321,7 +321,7 @@ final class LogsView: NSView {
                        sorted.contains(where: { $0.name == last }) { self.selectGroup(last) }
                 }
             } catch {
-                await MainActor.run {
+                await MainActor.run { [weak self] in
                     guard let self else { return }
                     self.groupsLoading = false
                     self.picker.update(groups: self.groups, loading: false)
@@ -356,7 +356,7 @@ final class LogsView: NSView {
                     let r = try await AWSClient.filterLogEvents(c, region: region, group: group, start: start, pattern: pattern,
                                                                 streamPrefix: prefix, nextToken: token, limit: 1000)
                     token = r.nextToken; pages += 1; total += r.events.count
-                    let keepGoing: Bool = await MainActor.run {
+                    let keepGoing: Bool = await MainActor.run { [weak self] in
                         guard let self, gen == self.generation else { return false }
                         self.append(r.events, scrollToEnd: true)
                         self.setStatus("Buscando… \(self.events.count) eventos")
@@ -364,15 +364,16 @@ final class LogsView: NSView {
                     }
                     if !keepGoing { return }
                 } while token != nil && total < LogsView.maxEvents && pages < 40
-                await MainActor.run {
+                let hasMore = token != nil
+                await MainActor.run { [weak self] in
                     guard let self, gen == self.generation else { return }
                     self.searching = false; self.searchButton.isEnabled = true
                     let n = self.events.count
-                    let more = token != nil ? " Hay más eventos: acota el rango o el filtro para verlos." : ""
+                    let more = hasMore ? " Hay más eventos: acota el rango o el filtro para verlos." : ""
                     self.setStatus(n == 0 ? "Sin eventos en el rango y filtro elegidos." : "\(n) eventos en \(group) (\(region)).\(more)")
                 }
             } catch {
-                await MainActor.run {
+                await MainActor.run { [weak self] in
                     guard let self, gen == self.generation else { return }
                     self.searching = false; self.searchButton.isEnabled = true
                     self.setStatus(AWSClient.logsHint(for: error.localizedDescription), error: true)
@@ -420,17 +421,18 @@ final class LogsView: NSView {
                                                                 streamPrefix: prefix, nextToken: token, limit: 1000)
                     all += r.events; token = r.nextToken; pages += 1
                 } while token != nil && pages < 5
-                await MainActor.run {
+                let fetched = all
+                await MainActor.run { [weak self] in
                     guard let self, self.following, gen == self.generation else { return }
                     self.followBusy = false
                     let before = self.events.count
-                    self.append(all, scrollToEnd: self.isAtBottom)
-                    if let last = all.map(\.timestamp).max() { self.followFrom = max(self.followFrom, last) }
+                    self.append(fetched, scrollToEnd: self.isAtBottom)
+                    if let last = fetched.map(\.timestamp).max() { self.followFrom = max(self.followFrom, last) }
                     let f = DateFormatter(); f.dateFormat = "HH:mm:ss"
                     self.setStatus("Siguiendo · \(self.events.count) eventos (+\(self.events.count - before)) · \(f.string(from: Date()))")
                 }
             } catch {
-                await MainActor.run {
+                await MainActor.run { [weak self] in
                     guard let self else { return }
                     self.stopFollow()
                     self.setStatus(AWSClient.logsHint(for: error.localizedDescription), error: true)

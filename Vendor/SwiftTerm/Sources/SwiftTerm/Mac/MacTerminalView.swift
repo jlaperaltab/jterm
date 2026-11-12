@@ -697,6 +697,20 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     // doCommand/noop: - but more research needs to take place to figure out the priority
     // of those keys.
     //
+    /// ¿Option+tecla escribe un carácter propio de la distribución (@ | # \\ [ ] { } € ~)?
+    /// En US, Option+tecla da símbolos no ASCII (å, ∫…) o una tecla muerta de letra → se trata como Meta.
+    static func optionProducesText (_ event: NSEvent) -> Bool {
+        let produced = event.characters ?? ""
+        if let u = produced.unicodeScalars.first, produced.unicodeScalars.count == 1 {
+            if u.value >= 0x20 && u.value < 0x7f { return true }       // ASCII imprimible: @ | # …
+            if u == "€" { return true }
+        }
+        // Tecla muerta (p. ej. Option+ñ → ~ en teclado español): no genera carácter y la tecla base no es ASCII.
+        if produced.isEmpty, let b = event.charactersIgnoringModifiers?.unicodeScalars.first, b.value > 0x7f,
+           b.value < 0xF700 { return true }
+        return false
+    }
+
     public override func keyDown(with event: NSEvent) {
         selection.active = false
         let eventFlags = event.modifierFlags
@@ -706,6 +720,11 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
             if event.charactersIgnoringModifiers == "o" {
                 optionAsMetaKey.toggle()
             }
+        } else if optionAsMetaKey && eventFlags.contains (.option) && Self.optionProducesText (event) {
+            // jTerm: en teclados con AltGr (Option+2 → @, Option+1 → |, Option+3 → #…) el carácter
+            // lo escribe el sistema; solo se usa Meta cuando Option no produce un carácter ASCII.
+            interpretKeyEvents([event])
+            return
         } else if optionAsMetaKey && eventFlags.contains (.option) {
             if let rawCharacter = event.charactersIgnoringModifiers {
                 if let fs = rawCharacter.unicodeScalars.first {
@@ -1575,7 +1594,7 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
             return nil
         case .maximizeWindowVertically:
             return nil
-        case .moveWindowTo(let newX, let newY):
+        case .moveWindowTo(_, _):
             return nil
         case .refreshWindow:
             return nil
