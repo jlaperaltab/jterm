@@ -73,24 +73,37 @@ final class Updater {
 
     // MARK: GitHub
 
+    /// Deja pasar el redirect de `/releases/latest` para leer a qué tag apunta, sin seguirlo.
+    private final class NoRedirect: NSObject, URLSessionTaskDelegate {
+        func urlSession(_ s: URLSession, task: URLSessionTask, willPerformHTTPRedirection r: HTTPURLResponse,
+                        newRequest: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
+    }
+
+    /// Se usa la web de GitHub y no la API: la API sin token permite solo 60 consultas por hora y por IP, y en redes
+    /// compartidas (VPN, oficina) se agota y responde 403. La web (`/releases/latest` → `/releases/tag/vX.Y.Z`) no tiene ese límite,
+    /// y los archivos del release se llaman siempre jTerm-<versión>.dmg y jTerm-<versión>.dmg.sha256 (los sube release.sh).
     private func fetchLatest(repo: String) async throws -> Release {
-        var req = URLRequest(url: URL(string: "https://api.github.com/repos/\(repo)/releases/latest")!)
-        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        var req = URLRequest(url: URL(string: "https://github.com/\(repo)/releases/latest")!)
+        req.httpMethod = "HEAD"
         req.setValue("jTerm-updater", forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = 15
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let session = URLSession(configuration: .ephemeral, delegate: NoRedirect(), delegateQueue: nil)
+        defer { session.finishTasksAndInvalidate() }
+        let (_, resp) = try await session.data(for: req)
         guard let http = resp as? HTTPURLResponse else { throw UpdateError.msg("Respuesta no válida.") }
-        if http.statusCode == 404 { throw UpdateError.msg("No hay ningún release publicado en \(repo) (o el repositorio no es público).") }
-        guard http.statusCode == 200, let j = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let tag = j["tag_name"] as? String else { throw UpdateError.msg("GitHub respondió con el código \(http.statusCode).") }
-        let assets = (j["assets"] as? [[String: Any]] ?? []).compactMap { a -> (String, URL)? in
-            guard let n = a["name"] as? String, let u = (a["browser_download_url"] as? String).flatMap(URL.init) else { return nil }
-            return (n, u)
+        guard (300..<400).contains(http.statusCode), let loc = http.value(forHTTPHeaderField: "Location"),
+              let range = loc.range(of: "/releases/tag/") else {
+            if http.statusCode == 404 || (300..<400).contains(http.statusCode) {
+                throw UpdateError.msg("No hay ningún release publicado en \(repo) (o el repositorio no es público).")
+            }
+            throw UpdateError.msg("GitHub respondió con el código \(http.statusCode).")
         }
-        guard let dmg = assets.first(where: { $0.0.hasSuffix(".dmg") }) else { throw UpdateError.msg("El release \(tag) no incluye un archivo .dmg.") }
-        let sha = assets.first(where: { $0.0 == dmg.0 + ".sha256" })
+        let tag = String(loc[range.upperBound...]).removingPercentEncoding ?? ""
+        guard !tag.isEmpty, !tag.contains("/") else { throw UpdateError.msg("No se pudo leer la versión del release.") }
         let version = tag.hasPrefix("v") || tag.hasPrefix("V") ? String(tag.dropFirst()) : tag
-        return Release(version: version, notes: (j["body"] as? String) ?? "", dmg: dmg.1, sha: sha?.1)
+        let base = "https://github.com/\(repo)/releases/download/\(tag)/jTerm-\(version).dmg"
+        guard let dmg = URL(string: base), let sha = URL(string: base + ".sha256") else { throw UpdateError.msg("Versión no válida: \(tag).") }
+        return Release(version: version, notes: "", dmg: dmg, sha: sha)
     }
 
     static func isNewer(_ a: String, than b: String) -> Bool {
