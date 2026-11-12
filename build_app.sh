@@ -41,7 +41,8 @@ if [ -z "$ADHOC" ] && security find-certificate -c "jTerm Local Signing" >/dev/n
   codesign --force --sign "jTerm Local Signing" "$APP"
 else
   [ -z "$ADHOC" ] && echo "AVISO: sin certificado 'jTerm Local Signing'; firma ad-hoc (el Keychain volverá a pedir la clave). Ejecuta tools/make_signing_cert.sh"
-  if [ -n "$ADHOC" ]; then codesign --force --sign - "$APP"
-  else codesign --force --sign - -r='designated => identifier "cl.jotaele.jterm"' "$APP"; fi
+  # Requisito de firma fijo (solo el identificador), no el hash del binario: así el Keychain reconoce cada versión
+  # nueva como la misma app y no vuelve a pedir la clave tras actualizar.
+  codesign --force --sign - -r='designated => identifier "cl.jotaele.jterm"' "$APP"
 fi
 echo "Listo: $APP"
