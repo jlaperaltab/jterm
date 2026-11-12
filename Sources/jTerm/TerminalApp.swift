@@ -198,7 +198,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return m
         }
         let app = submenu("jTerm")
+        add(app, "Acerca de jTerm", #selector(showAbout), "", target: self)
+        app.items.last?.image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)
         add(app, "Buscar actualizaciones…", #selector(checkUpdates), "", target: self)
+        app.items.last?.image = NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: nil)
+        app.addItem(.separator())
         add(app, "Ajustes…", #selector(openSettings), ",", target: self)
         app.addItem(.separator())
         add(app, "Salir de jTerm", #selector(NSApplication.terminate(_:)), "q")
@@ -224,6 +228,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             it.tag = i - 1; it.target = self
         }
         NSApp.mainMenu = main
+    }
+    @objc func showAbout() {
+        let repo = (Bundle.main.object(forInfoDictionaryKey: "JTermUpdateRepo") as? String) ?? ""
+        let credits = NSMutableAttributedString(
+            string: "Terminal para macOS con SSH, AWS, archivos y comandos guardados.\n",
+            attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.labelColor])
+        if !repo.isEmpty, let url = URL(string: "https://github.com/\(repo)") {
+            credits.append(NSAttributedString(string: "github.com/\(repo)",
+                attributes: [.font: NSFont.systemFont(ofSize: 11), .link: url]))
+        }
+        credits.addAttribute(.paragraphStyle, value: { let p = NSMutableParagraphStyle(); p.alignment = .center; return p }(),
+                             range: NSRange(location: 0, length: credits.length))
+        NSApp.orderFrontStandardAboutPanel(options: [.applicationName: "jTerm", .credits: credits])
+        NSApp.activate(ignoringOtherApps: true)
     }
     @MainActor @objc func checkUpdates() { Updater.shared.checkManually() }
     @objc func openSettings() { SettingsWindow.shared.show() }
