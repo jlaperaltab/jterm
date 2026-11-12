@@ -10,7 +10,7 @@
 ![Swift 5.9](https://img.shields.io/badge/Swift-5.9-F05138?style=flat-square&logo=swift&logoColor=white)
 ![Apple Silicon + Intel](https://img.shields.io/badge/Apple%20Silicon%20%2B%20Intel-universal-8a8f98?style=flat-square)
 
-[**Descargar**](https://github.com/jlaperaltab/jterm/releases/latest) · [Funciones](#-funciones) · [Instalación](#-instalación) · [Compilar](#-compilar-desde-el-código) · [Publicar versiones](#-publicar-una-versión)
+[**Descargar**](https://github.com/jlaperaltab/jterm/releases/latest) · [Funciones](#-funciones) · [Instalación](#-instalación) · [Compilar](#-compilar-desde-el-código)
 
 </div>
 
@@ -98,42 +98,6 @@ Para que macOS no vuelva a pedir la clave del Keychain en cada recompilación lo
 
 ```sh
 tools/make_signing_cert.sh
-```
-
-## 🚀 Publicar una versión
-
-Necesitas la [CLI de GitHub](https://cli.github.com) con la sesión iniciada (`gh auth login`).
-
-```sh
-GITHUB_REPO=usuario/repo ./release.sh 0.2.0
-```
-
-El script compila el DMG universal, genera su `.sha256` y crea el release `v0.2.0` con ambos archivos. Los nombres deben ser siempre `jTerm-<versión>.dmg` y `jTerm-<versión>.dmg.sha256`, porque es lo que el actualizador espera.
-
-### Cómo funciona la actualización
-
-```
-jTerm ──► github.com/<repo>/releases/latest   (redirect → tag vX.Y.Z)
-      ──► descarga jTerm-X.Y.Z.dmg + .sha256
-      ──► verifica SHA-256 y que sea cl.jotaele.jterm
-      ──► copia la app nueva junto a la actual
-      ──► script auxiliar: espera el cierre, intercambia y reabre
-```
-
-- No usa la API de GitHub, así que no se topa con el límite de consultas en redes compartidas.
-- Si el hash no coincide o falta el `.sha256`, no instala nada.
-- La firma lleva un requisito fijo (`identifier "cl.jotaele.jterm"`) para que el Keychain reconozca cada versión como la misma app.
-
-## 🗂 Estructura
-
-```
-Sources/jTerm/     Código de la app (AppKit, sin dependencias salvo SwiftTerm)
-Vendor/SwiftTerm/  SwiftTerm con parches de jTerm (ver JTERM_PATCH.md)
-Resources/         Icono de la app
-tools/             Generadores de icono, fondo del DMG y certificado de firma
-build_app.sh       Compila y empaqueta jTerm.app
-make_dmg.sh        Genera el DMG para compartir
-release.sh         Compila el DMG y lo publica como release de GitHub
 ```
 
 ## 🙏 Créditos
