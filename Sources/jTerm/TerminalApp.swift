@@ -284,6 +284,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                     symbol: "chevron.left.forwardslash.chevron.right", keywords: c.command,
                                     run: { [weak self] alt in self?.insertSnippet(c, runNow: alt) }))
         }
+        if let acc = acc {
+            items.append(FinderItem(kind: .action, title: "Explorar S3", subtitle: "Buckets de \(acc.name.isEmpty ? acc.accessKeyId : acc.name)",
+                                    symbol: "shippingbox", env: acc.env, keywords: "s3 bucket archivos", run: { _ in aws.openS3() }))
+        }
         items.append(FinderItem(kind: .action, title: "Nueva pestaña local", subtitle: "Abre un terminal en este Mac", symbol: "terminal",
                                 run: { _ in st.newLocal() }))
         items.append(FinderItem(kind: .action, title: "Ajustes", subtitle: "Abre los ajustes de jTerm", symbol: "gearshape",

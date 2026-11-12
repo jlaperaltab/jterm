@@ -63,6 +63,8 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
     var onDelete: (([FileItem]) async throws -> Void)?
     var onRename: ((FileItem, String) async throws -> Void)?
     var onRetry: (() -> Void)?
+    /// Acciones extra del menú contextual para un elemento (las usa el explorador de S3).
+    var extraActions: ((FileItem) -> [(title: String, run: () -> Void)])?
 
     private(set) var path = ""
     private var items: [FileItem] = []
@@ -266,6 +268,9 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
 
     // MARK: Selección y acciones
 
+    /// El elemento listado con esa ruta, si está en la carpeta actual.
+    func item(atPath p: String) -> FileItem? { items.first { $0.path == p } }
+
     var selectedItems: [FileItem] { table.selectedRowIndexes.compactMap { visible.indices.contains($0) ? visible[$0] : nil } }
 
     @objc private func newFolder() {
@@ -335,6 +340,12 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
             if visible[r].isDir { menu.addItem(withTitle: "Abrir", action: #selector(openClicked), keyEquivalent: "").target = self }
             menu.addItem(withTitle: kind == .local ? "Subir al servidor" : "Descargar a este Mac",
                          action: #selector(transferSelected), keyEquivalent: "").target = self
+            if let extras = extraActions?(visible[r]), !extras.isEmpty {
+                for a in extras {
+                    let mi = NSMenuItem(title: a.title, action: #selector(runExtra(_:)), keyEquivalent: "")
+                    mi.target = self; mi.representedObject = ActionBox(a.run); menu.addItem(mi)
+                }
+            }
             menu.addItem(.separator())
         }
         menu.addItem(withTitle: "Nueva carpeta…", action: #selector(newFolder), keyEquivalent: "").target = self
@@ -345,6 +356,7 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
         menu.addItem(withTitle: "Actualizar", action: #selector(reload), keyEquivalent: "").target = self
     }
     @objc private func transferSelected() { onTransferSelected?() }
+    @objc private func runExtra(_ s: NSMenuItem) { (s.representedObject as? ActionBox)?.fn() }
     @objc private func deleteMenu() { deleteSelected() }
     @objc private func renameMenu() { renameSelected() }
 
@@ -415,6 +427,11 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
         onDrop?(paths, dest)
         return true
     }
+}
+
+final class ActionBox: NSObject {
+    let fn: () -> Void
+    init(_ fn: @escaping () -> Void) { self.fn = fn }
 }
 
 // MARK: - Cola de transferencias
@@ -497,10 +514,10 @@ final class FileTransferView: NSView {
         local.onDelete = { items in for i in items { try FileManager.default.trashItem(at: URL(fileURLWithPath: i.path), resultingItemURL: nil) } }
         local.onRename = { item, newPath in try FileManager.default.moveItem(atPath: item.path, toPath: newPath) }
         local.onDrop = { [weak self] paths, dest in self?.download(paths, to: dest) }
-        local.onTransferSelected = { [weak self] in self?.downloadSelected() }
+        local.onTransferSelected = { [weak self] in self?.uploadSelected() }
 
         remote.onDrop = { [weak self] paths, dest in self?.upload(paths, to: dest) }
-        remote.onTransferSelected = { [weak self] in self?.uploadSelected() }
+        remote.onTransferSelected = { [weak self] in self?.downloadSelected() }
         remote.onRetry = { [weak self] in self?.onRetry?() }
 
         let toRemote = IconButton(symbol: "arrow.right", tip: "Subir selección al servidor", size: 32, target: self, action: #selector(uploadTapped))

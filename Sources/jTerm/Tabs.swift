@@ -283,6 +283,9 @@ final class AppState {
         onChange?()
     }
     func newLocal() { add(TerminalTab.local()) }
+    func openS3(account: AWSAccount, credentials: @escaping () throws -> AWSCredentials) {
+        add(S3Tab(account: account, credentials: credentials))
+    }
     func openLogs(account: AWSAccount, region: String, credentials: @escaping () throws -> AWSCredentials) {
         add(LogsTab(account: account, region: region, credentials: credentials))
     }

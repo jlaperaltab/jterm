@@ -101,7 +101,8 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
         let cap1 = smallCaption("Cuenta"), cap2 = smallCaption("Región")
         let row1 = NSStackView(views: [accountPopup, more, add]); row1.spacing = 4
         let logsBtn = IconButton(symbol: "doc.text.magnifyingglass", tip: "Ver logs de CloudWatch", target: self, action: #selector(openLogsTapped))
-        let row2 = NSStackView(views: [regionPopup, refreshBtn, logsBtn]); row2.spacing = 4
+        let s3Btn = IconButton(symbol: "shippingbox", tip: "Explorar S3", target: self, action: #selector(openS3))
+        let row2 = NSStackView(views: [regionPopup, refreshBtn, logsBtn, s3Btn]); row2.spacing = 4
         accountPopup.setContentHuggingPriority(.defaultLow, for: .horizontal)
         regionPopup.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
@@ -174,6 +175,12 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
         let region = (picked == nil || picked == "Todas las regiones") ? acc.region : picked!
         let store = self.store
         AppState.shared.openLogs(account: acc, region: region) { try store.credentials(acc) }
+    }
+    /// Abre el explorador de S3 de la cuenta elegida. Las credenciales se leen del Keychain solo cuando la pestaña llama a AWS.
+    @objc func openS3() {
+        guard let acc = account else { setStatus("Agrega una cuenta de AWS con +.", error: true); return }
+        let store = self.store
+        AppState.shared.openS3(account: acc) { try store.credentials(acc) }
     }
     @objc private func showMore(_ b: NSButton) {
         let m = NSMenu()

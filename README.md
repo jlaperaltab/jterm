@@ -27,6 +27,7 @@
 **Servidores y AWS**
 - Servidores guardados con usuario, puerto y llave; las contraseñas viven en el **Keychain** de macOS, nunca en un archivo.
 - Cuentas AWS con listado de instancias EC2 y conexión mediante EC2 Instance Connect.
+- **Explorador de S3**: tu Mac a un lado y los buckets de la cuenta al otro. Navega, sube y baja archivos y carpetas (arrastrando o con las flechas), crea carpetas, renombra y elimina, y copia una **URL firmada** para compartir un objeto.
 - **Visor de logs de CloudWatch**: elige grupo y rango, filtra con patrones, filtra por prefijo de stream y activa **Seguir** para ver los eventos nuevos en vivo.
 
 **Archivos**
