@@ -130,7 +130,7 @@ final class SyncManager: SyncLocalAdapter {
 
     private static let syncedPrefs = [
         "loginShell", "confirmClose", "confirmQuit", "sidebarAtLaunch", "showSnippetsButton", "theme", "fontFamily", "fontSize",
-        "cursorShape", "cursorBlink", "scrollback", "optionAsMeta", "mouseReporting", "backspaceCtrlH", "term",
+        "cursorShape", "cursorBlink", "scrollback", "optionAsMeta", "mouseReporting", "backspaceCtrlH", "term", "confirmMultilinePaste", "warnDangerousProd",
         "sshKeepAlive", "sshHostKey", "sshCompression", "sshForwardAgent", "sshExtra", "defaultUser", "defaultPort",
         "filesLocalHidden", "filesRemoteHidden", "filesConfirmDelete", "transferDismiss", "awsRegion", "awsUser", "awsRegions",
     ]   // se excluyen a propósito los específicos de cada Mac: shell, carpetas iniciales
@@ -162,8 +162,10 @@ final class SyncManager: SyncLocalAdapter {
             if enabled.contains(SyncKind.server) {
                 for s in st.store.servers {
                     let key = "server:\(s.id.uuidString)"
-                    items[key] = SyncItem(fields: ["name": .string(s.name), "host": .string(s.host), "port": .int(s.port), "user": .string(s.user),
-                                                   "auth": .string(s.auth == .key ? "key" : "password"), "keyPath": .string(s.keyPath)],
+                    var fields: [String: JSONValue] = ["name": .string(s.name), "host": .string(s.host), "port": .int(s.port), "user": .string(s.user),
+                                                       "auth": .string(s.auth == .key ? "key" : "password"), "keyPath": .string(s.keyPath)]
+                    if let e = s.env { fields["env"] = .string(e.rawValue) }
+                    items[key] = SyncItem(fields: fields,
                                           secret: nil, naturalKey: "\(s.host.lowercased())|\(s.user)|\(s.port)")
                     secretJobs.append((key, s.id))
                 }
@@ -171,7 +173,9 @@ final class SyncManager: SyncLocalAdapter {
             if enabled.contains(SyncKind.aws) {
                 for a in st.awsStore.accounts {
                     let key = "aws:\(a.id.uuidString)"
-                    items[key] = SyncItem(fields: ["name": .string(a.name), "accessKeyId": .string(a.accessKeyId), "region": .string(a.region)],
+                    var fields: [String: JSONValue] = ["name": .string(a.name), "accessKeyId": .string(a.accessKeyId), "region": .string(a.region)]
+                    if let e = a.env { fields["env"] = .string(e.rawValue) }
+                    items[key] = SyncItem(fields: fields,
                                           secret: nil, naturalKey: a.accessKeyId)
                     secretJobs.append((key, a.id))
                 }
@@ -224,11 +228,13 @@ final class SyncManager: SyncLocalAdapter {
                     var s = st.store.servers.first { $0.id == uid } ?? Server()
                     s.id = uid; s.name = f["name"]?.string ?? ""; s.host = f["host"]?.string ?? ""; s.port = f["port"]?.int ?? 22
                     s.user = f["user"]?.string ?? ""; s.auth = f["auth"]?.string == "key" ? .key : .password; s.keyPath = f["keyPath"]?.string ?? ""
+                    s.env = f["env"]?.string.flatMap(ServerEnv.init(rawValue:))
                     st.store.upsert(s, secret: manageSecrets ? (item.secret ?? "") : nil)
                 case SyncKind.aws:
                     guard let uid = id(key) else { continue }
                     var a = st.awsStore.accounts.first { $0.id == uid } ?? AWSAccount()
                     a.id = uid; a.name = f["name"]?.string ?? ""; a.accessKeyId = f["accessKeyId"]?.string ?? ""; a.region = f["region"]?.string ?? "us-east-1"
+                    a.env = f["env"]?.string.flatMap(ServerEnv.init(rawValue:))
                     st.awsStore.upsert(a, secret: manageSecrets ? item.secret : nil)
                 case SyncKind.command:
                     guard let uid = id(key) else { continue }

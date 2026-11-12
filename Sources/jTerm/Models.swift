@@ -15,6 +15,7 @@ struct Server: Identifiable, Codable, Hashable {
     var user = ""
     var auth: AuthMethod = .password
     var keyPath = ""          // ruta a la llave privada (auth == .key)
+    var env: ServerEnv?       // entorno (producción, staging…); nil = sin etiqueta
 }
 
 /// Guarda secretos (contraseña / passphrase / clave secreta AWS) en el Keychain de macOS.

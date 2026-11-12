@@ -77,6 +77,10 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
     private var generation = 0
     var onEditAccount: ((AWSAccount?) -> Void)?
 
+    /// Instancias ya listadas (las usa el buscador rápido) y la cuenta a la que pertenecen.
+    var loadedInstances: [EC2Instance] { instances }
+    var currentAccount: AWSAccount? { account }
+
     private var account: AWSAccount? {
         let i = accountPopup.selectedIndex
         return store.accounts.indices.contains(i) ? store.accounts[i] : nil
@@ -269,6 +273,7 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
         dot.heightAnchor.constraint(equalToConstant: 8).isActive = true
         let name = NSTextField(labelWithString: i.name)
         name.font = .systemFont(ofSize: 12, weight: .medium); name.lineBreakMode = .byTruncatingTail
+        let nameRow = NSStackView(views: [name] + (account?.env.map { [EnvTag($0)] } ?? [])); nameRow.spacing = 6
         let ip = i.publicIP.isEmpty ? (i.privateIP.isEmpty ? i.state : i.privateIP + " (privada)") : i.publicIP
         let sub = NSTextField(labelWithString: "\(i.type) · \(ip)")
         sub.font = .systemFont(ofSize: 10); sub.textColor = .secondaryLabelColor; sub.lineBreakMode = .byTruncatingTail
@@ -276,7 +281,7 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
         name.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .horizontal)
         name.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(1), for: .horizontal)
         sub.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(1), for: .horizontal)
-        let texts = NSStackView(views: [name, sub]); texts.orientation = .vertical; texts.alignment = .leading; texts.spacing = 1
+        let texts = NSStackView(views: [nameRow, sub]); texts.orientation = .vertical; texts.alignment = .leading; texts.spacing = 1
         if AppState.shared.isConnected(key: "aws:\(i.id)") {
             texts.addArrangedSubview(ConnectedBadge()); texts.setCustomSpacing(5, after: sub)
         }
@@ -371,6 +376,7 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
                                                          user: user, publicKey: key.pub)
                     await MainActor.run {
                         let tab = TerminalTab.awsSSH(i, user: user, keyPath: key.path)
+                        tab.env = acc.env
                         tab.fileTarget = { try await SSHTargets.aws(i, user: user, store: store, account: acc) }
                         AppState.shared.add(tab)
                         self.setStatus("\(self.instances.count) instancias")
@@ -394,7 +400,7 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
             Task.detached {
                 do {
                     let creds = try store.credentials(acc)
-                    await MainActor.run { AppState.shared.add(TerminalTab.awsSSM(i, creds: creds, awsPath: cli)) }
+                    await MainActor.run { let tab = TerminalTab.awsSSM(i, creds: creds, awsPath: cli); tab.env = acc.env; AppState.shared.add(tab) }
                 } catch {
                     await MainActor.run { showAlert("No se pudo conectar a \(i.name)", error.localizedDescription, window: self.window) }
                 }
@@ -408,10 +414,11 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
 final class AWSAccountEditor: NSObject {
     private let account: AWSAccount
     private let isNew: Bool
-    private let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 460, height: 420),
+    private let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 460, height: 480),
                                 styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
     private let name = FocusField(), akid = FocusField(), secret = SecureFocusField(), region = FocusField()
     private var secretF: StyledField!
+    private var envPicker: EnvPicker!
     private var done: () -> Void = {}
 
     init(account: AWSAccount?) {
@@ -446,6 +453,7 @@ final class AWSAccountEditor: NSObject {
                                   placeholder: isNew ? "••••••••••••••••" : "Sin cambios", revealable: true)
         if !isNew { let id = self.account.id; secretF.loadSecret = { Keychain.read(id).secret } }
         let regionF = StyledField("Región por defecto", field: region, symbol: "globe", placeholder: "sa-east-1")
+        envPicker = EnvPicker(selected: self.account.env)
 
         let lock = NSImageView(image: NSImage(systemSymbolName: "lock.shield", accessibilityDescription: nil)!)
         lock.symbolConfiguration = .init(pointSize: 11, weight: .regular); lock.contentTintColor = .tertiaryLabelColor
@@ -460,7 +468,7 @@ final class AWSAccountEditor: NSObject {
         let form = NSStackView()
         form.orientation = .vertical; form.alignment = .leading; form.spacing = 14
         form.edgeInsets = NSEdgeInsets(top: 28, left: 24, bottom: 22, right: 24)
-        for v in [header, nameF, akidF, secretF!, regionF, noteRow, buttons] { form.addArrangedSubview(v) }
+        for v in [header, nameF, akidF, secretF!, regionF, envPicker!, noteRow, buttons] { form.addArrangedSubview(v) }
         form.setCustomSpacing(20, after: header); form.setCustomSpacing(20, after: noteRow)
         form.translatesAutoresizingMaskIntoConstraints = false
         panel.contentView = NSView(); panel.contentView!.addSubview(form)
@@ -470,7 +478,7 @@ final class AWSAccountEditor: NSObject {
             form.topAnchor.constraint(equalTo: panel.contentView!.topAnchor),
             form.widthAnchor.constraint(equalToConstant: 460),
         ])
-        for v in [nameF, akidF, secretF!, regionF, noteRow, buttons] as [NSView] {
+        for v in [nameF, akidF, secretF!, regionF, envPicker!, noteRow, buttons] as [NSView] {
             v.widthAnchor.constraint(equalToConstant: 412).isActive = true
         }
         form.layoutSubtreeIfNeeded()
@@ -493,6 +501,7 @@ final class AWSAccountEditor: NSObject {
         a.name = name.stringValue; a.accessKeyId = key
         let r = region.stringValue.trimmingCharacters(in: .whitespaces)
         a.region = r.isEmpty ? "us-east-1" : r
+        a.env = envPicker.value
         AppState.shared.awsStore.upsert(a, secret: sec)
         finish()
     }

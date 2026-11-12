@@ -684,6 +684,9 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     /// If this is set to `false`, then the key is passed to the OS, which produces the
     /// OS specific feature.
     public var optionAsMetaKey: Bool = true
+
+    /// jTerm: se llama al pulsar Retorno; si devuelve false, el Retorno no se envía al proceso.
+    public var returnInterceptor: (() -> Bool)?
     
     //
     // We capture a handful of keydown events and pre-process those, and then let
@@ -817,6 +820,8 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     public override func doCommand(by selector: Selector) {
         switch selector {
         case #selector(insertNewline(_:)):
+            // jTerm: permite confirmar o cancelar el Retorno (aviso de comandos delicados en producción).
+            if let ok = returnInterceptor, !ok() { return }
             send (EscapeSequences.cmdRet)
         case #selector(cancelOperation(_:)):
             send (EscapeSequences.cmdEsc)

@@ -496,6 +496,12 @@ final class SettingsWindow: NSObject {
                 row("Permitir que las aplicaciones capturen el mouse", "Necesario para tmux, vim o htop con ratón. Si lo desactivas, el mouse solo selecciona texto.",
                     toggle(s.mouseReporting) { [s] in s.mouseReporting = $0 }),
             ]),
+            section("Seguridad", [
+                row("Confirmar antes de pegar varias líneas", "Muestra las líneas y pregunta antes de enviarlas al terminal. No se pregunta dentro de vim, nano o less.",
+                    toggle(s.confirmMultilinePaste) { [s] in s.confirmMultilinePaste = $0 }),
+                row("Avisar de comandos delicados en producción", "En pestañas con entorno Producción pregunta antes de ejecutar rm, DROP, TRUNCATE, DELETE sin WHERE, docker rm, kubectl delete, reinicios y similares.",
+                    toggle(s.warnDangerousProd) { [s] in s.warnDangerousProd = $0 }),
+            ], footer: "El entorno de cada servidor o cuenta AWS se elige al editarlo."),
             section("Compatibilidad", [
                 row("Tipo de terminal (TERM)", "Algunos servidores antiguos no conocen xterm-256color. Se aplica a las pestañas nuevas.",
                     choice(terms, terms.firstIndex(of: s.termName) ?? 0, width: 190) { [s] in s.termName = terms[$0] }),

@@ -8,6 +8,7 @@ struct AWSAccount: Identifiable, Codable, Hashable {
     var name = ""
     var accessKeyId = ""
     var region = "us-east-1"
+    var env: ServerEnv?       // entorno de la cuenta; se aplica a las pestañas de sus instancias
 }
 
 struct AWSCredentials { let accessKey: String; let secret: String }

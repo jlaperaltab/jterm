@@ -7,6 +7,7 @@ final class TabButton: NSView {
     private let label = NSTextField(labelWithString: "")
     private let icon = NSImageView()
     private let close = NSButton()
+    private let envBar = NSView()
     private var hovering = false { didSet { refresh() } }
     var active = false { didSet { refresh() } }
 
@@ -36,13 +37,23 @@ final class TabButton: NSView {
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
             label.widthAnchor.constraint(lessThanOrEqualToConstant: 160),
         ])
+        if let env = tab.env {      // franja inferior con el color del entorno
+            envBar.wantsLayer = true; envBar.layer?.cornerRadius = 1; envBar.layer?.backgroundColor = env.color.cgColor
+            envBar.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(envBar)
+            NSLayoutConstraint.activate([
+                envBar.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8), envBar.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+                envBar.bottomAnchor.constraint(equalTo: bottomAnchor), envBar.heightAnchor.constraint(equalToConstant: 2),
+            ])
+        }
         addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self))
         refresh()
     }
     required init?(coder: NSCoder) { fatalError() }
 
     private func refresh() {
-        layer?.backgroundColor = (active ? Theme.bg : (hovering ? Theme.hover : .clear)).cgColor
+        let envTint = tab.env?.color.withAlphaComponent(active ? 0.22 : (hovering ? 0.12 : 0.07))
+        layer?.backgroundColor = (envTint ?? (active ? Theme.bg : (hovering ? Theme.hover : .clear))).cgColor
         let c: NSColor = active ? .white : .secondaryLabelColor
         label.textColor = c; icon.contentTintColor = tab.isConnected ? .systemGreen : c; close.contentTintColor = c
         close.alphaValue = (hovering || active) ? 1 : 0
@@ -194,7 +205,8 @@ final class Sidebar: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenuD
         name.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .horizontal)
         name.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(1), for: .horizontal)
         sub.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(1), for: .horizontal)
-        let texts = NSStackView(views: [name, sub]); texts.orientation = .vertical; texts.alignment = .leading; texts.spacing = 1
+        let nameRow = NSStackView(views: [name] + (s.env.map { [EnvTag($0)] } ?? [])); nameRow.spacing = 6
+        let texts = NSStackView(views: [nameRow, sub]); texts.orientation = .vertical; texts.alignment = .leading; texts.spacing = 1
         if AppState.shared.isConnected(key: "server:\(s.id.uuidString)") {
             texts.addArrangedSubview(ConnectedBadge()); texts.setCustomSpacing(5, after: sub)
         }

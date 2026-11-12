@@ -1,16 +1,80 @@
 import AppKit
 import SwiftTerm
 
-/// Terminal con un pegado que se comporta como el de Terminal.app o iTerm.
+/// Terminal con un pegado que se comporta como el de Terminal.app o iTerm, y con avisos de seguridad por entorno.
 final class JTermTerminalView: LocalProcessTerminalView {
     private static let pasteStart: [UInt8] = [0x1b, 0x5b, 0x32, 0x30, 0x30, 0x7e]   // ESC [ 200 ~
     private static let pasteEnd: [UInt8] = [0x1b, 0x5b, 0x32, 0x30, 0x31, 0x7e]     // ESC [ 201 ~
+
+    /// Entorno de la conexión (producción activa los avisos de comandos delicados) y nombre para los diálogos.
+    var env: ServerEnv?
+    var envName = ""
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        returnInterceptor = { [weak self] in self?.approveReturn() ?? true }
+    }
+    required init?(coder: NSCoder) { fatalError() }
 
     /// Cada salto de línea pegado se envía como Retorno (\r), igual que la tecla Enter. SwiftTerm envía \n,
     /// que programas como nano interpretan como Ctrl-J ("Justificar") y desordenan el texto.
     override func paste(_ sender: Any) {
         guard let text = NSPasteboard.general.string(forType: .string), !text.isEmpty else { return }
+        guard approvePaste(text, fromSnippet: false) else { return }
         pasteText(text)
+    }
+
+    // MARK: Avisos de seguridad
+
+    private var inProd: Bool { env == .prod && Settings.shared.warnDangerousProd }
+
+    /// Pregunta antes de pegar varias líneas, o un comando delicado en producción. Devuelve true si se puede pegar.
+    /// Los comandos guardados (`fromSnippet`) solo se revisan por el riesgo: el usuario ya eligió su texto.
+    func approvePaste(_ text: String, fromSnippet: Bool) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .newlines)
+        let lines = trimmed.components(separatedBy: .newlines)
+        let risk = inProd ? CommandGuard.risk(in: text) : nil
+        let multi = !fromSnippet && Settings.shared.confirmMultilinePaste && lines.count > 1 && !getTerminal().isCurrentBufferAlternate
+        guard risk != nil || multi else { return true }
+
+        let preview = lines.prefix(8).map { $0.count > 100 ? String($0.prefix(100)) + "…" : $0 }.joined(separator: "\n")
+            + (lines.count > 8 ? "\n… y \(lines.count - 8) líneas más" : "")
+        let a = NSAlert()
+        a.alertStyle = risk != nil ? .critical : .warning
+        if let risk {
+            a.messageText = "Comando delicado en PRODUCCIÓN"
+            a.informativeText = "Vas a pegar en “\(envName)”: \(risk).\n\n\(preview)"
+        } else {
+            a.messageText = "¿Pegar \(lines.count) líneas?"
+            a.informativeText = "Se enviarán al terminal. Si alguna línea es un comando, se ejecutará.\n\n\(preview)"
+        }
+        a.addButton(withTitle: "Cancelar"); a.addButton(withTitle: "Pegar de todos modos")
+        return a.runModal() == .alertSecondButtonReturn
+    }
+
+    /// Al pulsar Retorno en una pestaña de producción, revisa la línea que se va a ejecutar (lo que se ve en pantalla,
+    /// así que cubre lo escrito, el historial y el autocompletado). Devuelve false para no enviar el Retorno.
+    private func approveReturn() -> Bool {
+        guard inProd else { return true }
+        let t = getTerminal()
+        guard !t.isCurrentBufferAlternate else { return true }      // vim, nano, less…
+        let row = t.buffer.y
+        guard let line = t.getLine(row: row) else { return true }
+        var text = line.translateToString(trimRight: true)
+        // Comando largo que ocupa varias filas: las anteriores llenas hasta el borde son el inicio de la misma línea.
+        var r = row - 1
+        while r >= 0, row - r <= 6, let prev = t.getLine(row: r) {
+            let p = prev.translateToString(trimRight: true)
+            guard p.count >= t.cols - 1 else { break }
+            text = p + text; r -= 1
+        }
+        guard let risk = CommandGuard.risk(in: text) else { return true }
+        let a = NSAlert()
+        a.alertStyle = .critical
+        a.messageText = "Comando delicado en PRODUCCIÓN"
+        a.informativeText = "Estás en “\(envName)”: \(risk).\n\n\(text.trimmingCharacters(in: .whitespaces))"
+        a.addButton(withTitle: "Cancelar"); a.addButton(withTitle: "Ejecutar de todos modos")
+        return a.runModal() == .alertSecondButtonReturn
     }
 
     func pasteText(_ raw: String) {
@@ -39,8 +103,12 @@ protocol Tab: AnyObject {
     /// Identifica el servidor al que pertenece la pestaña (para el badge “Conectado”).
     var connectionKey: String? { get }
     var isConnected: Bool { get }
+    /// Entorno de la conexión (para colorear la pestaña); nil si no tiene.
+    var env: ServerEnv? { get }
     func shutdown()
 }
+
+extension Tab { var env: ServerEnv? { nil } }
 
 final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
     let id = UUID()
@@ -50,6 +118,7 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
     var onExit: ((Tab) -> Void)?
     var fileTarget: (() async throws -> SSHTarget)?
     var connectionKey: String?
+    var env: ServerEnv? { didSet { applyEnv() } }
     private(set) var connected = false
     var isConnected: Bool { connected }
     /// ssh ejecuta LocalCommand solo cuando la autenticación fue exitosa: imprime un título que detectamos.
@@ -77,6 +146,7 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
 
     deinit { NotificationCenter.default.removeObserver(self) }
     @objc private func settingsChanged() { applySettings() }
+    func applyEnv() { (view as? JTermTerminalView).map { $0.env = env; $0.envName = title } }
 
     private var appliedTheme = "", appliedFont = ""
 
@@ -141,6 +211,7 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
         tab.closesOnExit = false
         tab.fileTarget = { await SSHTargets.server(s) }
         tab.connectionKey = "server:\(s.id.uuidString)"
+        tab.env = s.env
         if let warning { tab.view.feed(text: "\u{1b}[33m\(warning)\u{1b}[0m\r\n") }
         return tab
     }

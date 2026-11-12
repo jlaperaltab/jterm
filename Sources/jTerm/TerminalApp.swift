@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let container = NSView()
     var sidebarWidth: NSLayoutConstraint!
     let resizeHandle = ResizeHandle()
+    let envStrip = NSView()      // franja de color arriba del terminal cuando la pestaña tiene entorno
     let snippetButton = SnippetButton()
     let snippets = SnippetsPopover()
     static let defaultSidebarWidth: CGFloat = 220
@@ -46,6 +47,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             sidebar.leadingAnchor.constraint(equalTo: root.leadingAnchor), sidebarWidth,
             container.topAnchor.constraint(equalTo: tabBar.bottomAnchor), container.bottomAnchor.constraint(equalTo: root.bottomAnchor),
             container.leadingAnchor.constraint(equalTo: sidebar.trailingAnchor), container.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+        ])
+
+        envStrip.wantsLayer = true; envStrip.isHidden = true
+        envStrip.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(envStrip)
+        NSLayoutConstraint.activate([
+            envStrip.topAnchor.constraint(equalTo: container.topAnchor), envStrip.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            envStrip.trailingAnchor.constraint(equalTo: container.trailingAnchor), envStrip.heightAnchor.constraint(equalToConstant: 3),
         ])
 
         resizeHandle.translatesAutoresizingMaskIntoConstraints = false
@@ -93,6 +102,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sidebar.reload()
         updateSnippetButton()
         guard let tab = AppState.shared.current else { return }
+        envStrip.isHidden = tab.env == nil
+        envStrip.layer?.backgroundColor = tab.env?.color.cgColor
         if shown !== tab {
             shown?.content.removeFromSuperview()
             let v = tab.content
@@ -165,6 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Pega el comando en la consola activa; lo ejecuta si el comando lo pide o con ⌥.
     func insertSnippet(_ s: Snippet, runNow: Bool) {
         guard let tab = AppState.shared.current as? TerminalTab, let v = tab.view as? JTermTerminalView else { NSSound.beep(); return }
+        guard v.approvePaste(s.command, fromSnippet: true) else { return }
         v.pasteText(s.command.trimmingCharacters(in: .newlines))
         if s.autoRun || runNow { v.send([0x0d]) }
         window.makeFirstResponder(v)
@@ -219,6 +231,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let cmds = submenu("Comandos")
         add(cmds, "Mostrar comandos guardados", #selector(showSnippets), "k", [.command, .shift], target: self)
 
+        add(cmds, "Buscar servidor, instancia o comando…", #selector(showFinder), "k", target: self)
+
         let tabs = submenu("Pestañas")
         add(tabs, "Siguiente", #selector(nextTab), "]", [.command, .shift], target: self)
         add(tabs, "Anterior", #selector(prevTab), "[", [.command, .shift], target: self)
@@ -244,6 +258,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
     @MainActor @objc func checkUpdates() { Updater.shared.checkManually() }
+    /// Elementos del buscador rápido (⌘K).
+    func finderItems() -> [FinderItem] {
+        let st = AppState.shared
+        var items: [FinderItem] = []
+        for t in st.tabs {
+            items.append(FinderItem(kind: .tab, title: t.title, subtitle: t.isConnected ? "Pestaña abierta · conectada" : "Pestaña abierta",
+                                    symbol: t.iconName, env: t.env, run: { _ in st.select(t) }))
+        }
+        for s in st.store.servers {
+            items.append(FinderItem(kind: .server, title: s.name.isEmpty ? s.host : s.name, subtitle: (s.user.isEmpty ? "" : s.user + "@") + s.host,
+                                    symbol: s.auth == .key ? "key.fill" : "lock.fill", env: s.env, keywords: s.host, run: { _ in st.connect(s) }))
+        }
+        let aws = sidebar.aws
+        let acc = aws.currentAccount
+        for i in aws.loadedInstances where i.state == "running" {
+            let ip = i.publicIP.isEmpty ? i.privateIP : i.publicIP
+            items.append(FinderItem(kind: .instance, title: i.name.isEmpty ? i.id : i.name,
+                                    subtitle: "AWS\(acc.map { " · " + ($0.name.isEmpty ? $0.accessKeyId : $0.name) } ?? "") · \(i.region) · \(ip)",
+                                    symbol: "cloud.fill", env: acc?.env, keywords: "\(i.id) \(i.publicIP) \(i.privateIP) \(i.type)",
+                                    run: { _ in aws.connect(i) }))
+        }
+        for c in SnippetStore.shared.items {
+            items.append(FinderItem(kind: .snippet, title: c.title, subtitle: c.firstLine + (c.lineCount > 1 ? "  (+\(c.lineCount - 1) líneas)" : ""),
+                                    symbol: "chevron.left.forwardslash.chevron.right", keywords: c.command,
+                                    run: { [weak self] alt in self?.insertSnippet(c, runNow: alt) }))
+        }
+        items.append(FinderItem(kind: .action, title: "Nueva pestaña local", subtitle: "Abre un terminal en este Mac", symbol: "terminal",
+                                run: { _ in st.newLocal() }))
+        items.append(FinderItem(kind: .action, title: "Ajustes", subtitle: "Abre los ajustes de jTerm", symbol: "gearshape",
+                                run: { [weak self] _ in self?.openSettings() }))
+        return items
+    }
+    @objc func showFinder() { QuickFinder.shared.toggle(over: window, items: finderItems()) }
     @objc func openSettings() { SettingsWindow.shared.show() }
     @objc func newTab() { AppState.shared.newLocal() }
     @objc func closeTab() { if let t = AppState.shared.current { AppState.shared.requestClose(t) } }
