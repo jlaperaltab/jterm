@@ -687,6 +687,9 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
 
     /// jTerm: se llama al pulsar Retorno; si devuelve false, el Retorno no se envía al proceso.
     public var returnInterceptor: (() -> Bool)?
+
+    /// jTerm: ⌘+clic sobre texto que no es un enlace OSC 8. Recibe la línea bajo el cursor y la columna; devuelve true si lo atendió.
+    public var linkClickInterceptor: ((_ line: String, _ column: Int) -> Bool)?
     
     //
     // We capture a handful of keydown events and pre-process those, and then let
@@ -1299,6 +1302,12 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
             if let payload = getPayload(for: event) as? String {
                 if let (url, params) = urlAndParamsFrom(payload: payload) {
                     terminalDelegate?.requestOpenLink(source: self, link: url, params: params)
+                }
+            } else if let handler = linkClickInterceptor {
+                let hit = calculateMouseHit(with: event).grid
+                let lines = terminal.displayBuffer.lines
+                if hit.row >= 0, hit.row < lines.count {
+                    _ = handler(lines[hit.row].translateToString(trimRight: true), hit.col)
                 }
             }
         }

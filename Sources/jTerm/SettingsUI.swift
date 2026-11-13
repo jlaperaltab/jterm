@@ -493,6 +493,8 @@ final class SettingsWindow: NSObject {
                     choice(["1.000", "5.000", "10.000", "50.000", "100.000"], scrollIdx, width: 130) { [s] in s.scrollback = scrolls[$0] }),
                 row("Usar Option como Meta", "Permite atajos como Option+← para saltar palabras en el shell.",
                     toggle(s.optionAsMeta) { [s] in s.optionAsMeta = $0 }),
+                row("Subrayar las URLs de la salida", "Las URLs se ven subrayadas; ⌘+clic las abre. Con ⌘ pulsado también se subrayan las rutas de archivo.",
+                    toggle(s.underlineLinks) { [s] in s.underlineLinks = $0 }),
                 row("Permitir que las aplicaciones capturen el mouse", "Necesario para tmux, vim o htop con ratón. Si lo desactivas, el mouse solo selecciona texto.",
                     toggle(s.mouseReporting) { [s] in s.mouseReporting = $0 }),
             ]),
@@ -502,6 +504,12 @@ final class SettingsWindow: NSObject {
                 row("Avisar de comandos delicados en producción", "En pestañas con entorno Producción pregunta antes de ejecutar rm, DROP, TRUNCATE, DELETE sin WHERE, docker rm, kubectl delete, reinicios y similares.",
                     toggle(s.warnDangerousProd) { [s] in s.warnDangerousProd = $0 }),
             ], footer: "El entorno de cada servidor o cuenta AWS se elige al editarlo."),
+            section("Grabaciones", [
+                row("Grabar automáticamente las pestañas de producción", "Cada pestaña con entorno Producción empieza a grabarse sola. También puedes grabar cualquier pestaña con ⌥⌘R.",
+                    toggle(s.autoRecordProd) { [s] in s.autoRecordProd = $0 }),
+                row("Carpeta de grabaciones", "Se guarda el texto de lo que muestra el terminal, un archivo por sesión. Vacío = la carpeta de datos de jTerm.",
+                    pathPicker(s.recordingDirectory, placeholder: "Predeterminada") { [s] in s.recordingDirectory = $0 }),
+            ], footer: "Las grabaciones pueden contener información sensible; solo tu usuario puede leerlas."),
             section("Compatibilidad", [
                 row("Tipo de terminal (TERM)", "Algunos servidores antiguos no conocen xterm-256color. Se aplica a las pestañas nuevas.",
                     choice(terms, terms.firstIndex(of: s.termName) ?? 0, width: 190) { [s] in s.termName = terms[$0] }),

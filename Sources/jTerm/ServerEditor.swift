@@ -171,6 +171,7 @@ final class ServerEditor: NSObject {
     private var keyRow: NSView!
     private var secretField: StyledField!
     private var envPicker: EnvPicker!
+    private var jumpPicker: JumpPicker!
     private let form = NSStackView()
     private var done: () -> Void = {}
 
@@ -213,6 +214,7 @@ final class ServerEditor: NSObject {
         hostRow.distribution = .fill
         let userF = StyledField("Usuario", field: user, symbol: "person", placeholder: "root")
         envPicker = EnvPicker(selected: self.server.env)
+        jumpPicker = JumpPicker(current: self.server.jump, excluding: self.server.id, servers: AppState.shared.store.servers)
 
         auth.segmentStyle = .rounded
         auth.selectedSegment = AuthMethod.allCases.firstIndex(of: self.server.auth) ?? 0
@@ -240,7 +242,7 @@ final class ServerEditor: NSObject {
 
         form.orientation = .vertical; form.alignment = .leading; form.spacing = 14
         form.edgeInsets = NSEdgeInsets(top: 28, left: 24, bottom: 22, right: 24)
-        for v in [header, nameF, hostRow, userF, envPicker!, authBox, keyRow!, secretField!, noteRow, buttons] { form.addArrangedSubview(v) }
+        for v in [header, nameF, hostRow, userF, envPicker!, jumpPicker!, authBox, keyRow!, secretField!, noteRow, buttons] { form.addArrangedSubview(v) }
         form.setCustomSpacing(20, after: header); form.setCustomSpacing(20, after: noteRow)
         form.translatesAutoresizingMaskIntoConstraints = false
         panel.contentView = NSView(); panel.contentView!.addSubview(form)
@@ -250,7 +252,7 @@ final class ServerEditor: NSObject {
             form.topAnchor.constraint(equalTo: panel.contentView!.topAnchor),
             form.widthAnchor.constraint(equalToConstant: 460),
         ])
-        for v in [nameF, hostRow, userF, envPicker!, authBox, keyRow!, secretField!, buttons] as [NSView] {
+        for v in [nameF, hostRow, userF, envPicker!, jumpPicker!, authBox, keyRow!, secretField!, buttons] as [NSView] {
             v.widthAnchor.constraint(equalToConstant: 412).isActive = true
         }
         auth.widthAnchor.constraint(equalTo: authBox.widthAnchor).isActive = true
@@ -285,6 +287,7 @@ final class ServerEditor: NSObject {
         s.auth = AuthMethod.allCases[max(0, auth.selectedSegment)]
         s.keyPath = key.stringValue
         s.env = envPicker.value
+        s.jump = jumpPicker.value
         AppState.shared.store.upsert(s, secret: secretField.secretValue)
         finish()
     }

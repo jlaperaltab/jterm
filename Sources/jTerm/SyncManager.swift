@@ -130,7 +130,7 @@ final class SyncManager: SyncLocalAdapter {
 
     private static let syncedPrefs = [
         "loginShell", "confirmClose", "confirmQuit", "sidebarAtLaunch", "showSnippetsButton", "theme", "fontFamily", "fontSize",
-        "cursorShape", "cursorBlink", "scrollback", "optionAsMeta", "mouseReporting", "backspaceCtrlH", "term", "confirmMultilinePaste", "warnDangerousProd",
+        "cursorShape", "cursorBlink", "scrollback", "optionAsMeta", "mouseReporting", "backspaceCtrlH", "term", "confirmMultilinePaste", "warnDangerousProd", "autoRecordProd", "underlineLinks",
         "sshKeepAlive", "sshHostKey", "sshCompression", "sshForwardAgent", "sshExtra", "defaultUser", "defaultPort",
         "filesLocalHidden", "filesRemoteHidden", "filesConfirmDelete", "transferDismiss", "awsRegion", "awsUser", "awsRegions",
     ]   // se excluyen a propósito los específicos de cada Mac: shell, carpetas iniciales
@@ -165,6 +165,7 @@ final class SyncManager: SyncLocalAdapter {
                     var fields: [String: JSONValue] = ["name": .string(s.name), "host": .string(s.host), "port": .int(s.port), "user": .string(s.user),
                                                        "auth": .string(s.auth == .key ? "key" : "password"), "keyPath": .string(s.keyPath)]
                     if let e = s.env { fields["env"] = .string(e.rawValue) }
+                    if let j = s.jump { fields["jump"] = .string(j.uuidString) }
                     items[key] = SyncItem(fields: fields,
                                           secret: nil, naturalKey: "\(s.host.lowercased())|\(s.user)|\(s.port)")
                     secretJobs.append((key, s.id))
@@ -229,6 +230,7 @@ final class SyncManager: SyncLocalAdapter {
                     s.id = uid; s.name = f["name"]?.string ?? ""; s.host = f["host"]?.string ?? ""; s.port = f["port"]?.int ?? 22
                     s.user = f["user"]?.string ?? ""; s.auth = f["auth"]?.string == "key" ? .key : .password; s.keyPath = f["keyPath"]?.string ?? ""
                     s.env = f["env"]?.string.flatMap(ServerEnv.init(rawValue:))
+                    s.jump = f["jump"]?.string.flatMap(UUID.init(uuidString:))
                     st.store.upsert(s, secret: manageSecrets ? (item.secret ?? "") : nil)
                 case SyncKind.aws:
                     guard let uid = id(key) else { continue }

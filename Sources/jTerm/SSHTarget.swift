@@ -21,7 +21,10 @@ enum SSHTargets {
             t.env["TERMINAL_KEY"] = path
         }
         // El Keychain puede mostrar un diálogo: leerlo fuera del hilo principal.
-        let kc = await Task.detached { Keychain.read(s.id) }.value
+        let servers = await MainActor.run { AppState.shared.store.servers }
+        let (kc, jump) = await Task.detached { (Keychain.read(s.id), SSHJump.setup(for: s, servers: servers)) }.value
+        t.options += jump.options
+        for (k, v) in jump.env { t.env[k] = v }
         if let secret = kc.secret {
             t.env["SSH_ASKPASS"] = ServerStore.askpassScript()
             t.env["SSH_ASKPASS_REQUIRE"] = "force"

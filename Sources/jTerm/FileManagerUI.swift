@@ -553,7 +553,7 @@ final class FileTransferView: NSView {
     func showConnecting(_ text: String) { remote.showOverlay(text, spinning: true, retry: false) }
     func showError(_ text: String) { remote.showOverlay(text, spinning: false, retry: true) }
 
-    func attach(_ s: SFTPSession) {
+    func attach(_ s: SFTPSession, startPath: String? = nil) {
         session = s
         remote.setTitle(s.target.title)
         remote.homePath = s.home
@@ -565,7 +565,13 @@ final class FileTransferView: NSView {
         remote.onDelete = { [weak self] items in try await self?.session?.removeRemote(items.map(\.path)) }
         remote.onRename = { [weak s] item, newPath in try await s?.rename(item.path, to: newPath) }
         remote.hideOverlay()
-        remote.navigate(s.home)
+        var start = s.home
+        if let p = startPath, !p.isEmpty {
+            // ruta de un archivo → su carpeta; "~" → carpeta personal del servidor
+            start = p.hasPrefix("~") ? s.home + p.dropFirst() : p
+            if !start.hasSuffix("/"), (start as NSString).pathExtension.count > 0 { start = (start as NSString).deletingLastPathComponent }
+        }
+        remote.navigate(start)
     }
 
     // MARK: Transferencias
@@ -627,10 +633,12 @@ final class FileTab: Tab {
     var isConnected: Bool { session?.isAlive == true }
     private let provider: () async throws -> SSHTarget
     private var session: SFTPSession?
+    private let startPath: String?
 
-    init(key: String?, provider: @escaping () async throws -> SSHTarget) {
+    init(key: String?, provider: @escaping () async throws -> SSHTarget, startPath: String? = nil) {
         self.connectionKey = key
         self.provider = provider
+        self.startPath = startPath
         view.onRetry = { [weak self] in self?.start() }
         start()
     }
@@ -653,7 +661,7 @@ final class FileTab: Tab {
                         self.view.showError("La conexión se cerró.")
                         AppState.shared.onChange?()
                     }
-                    self.view.attach(s)
+                    self.view.attach(s, startPath: self.startPath)
                     AppState.shared.onChange?()
                 }
             } catch {

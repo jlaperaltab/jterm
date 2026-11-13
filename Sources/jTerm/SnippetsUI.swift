@@ -7,6 +7,8 @@ final class SnippetButton: NSView {
     var onClick: (() -> Void)?
     private let icon = NSImageView()
     private var hovering = false { didSet { refresh() } }
+    /// true mientras la lista de comandos está abierta: el botón queda resaltado.
+    var active = false { didSet { refresh() } }
 
     init() {
         super.init(frame: .zero)
@@ -30,10 +32,13 @@ final class SnippetButton: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     private func refresh() {
-        layer?.backgroundColor = (hovering ? Theme.accent.withAlphaComponent(0.28) : Theme.bar.withAlphaComponent(0.88)).cgColor
-        layer?.borderColor = (hovering ? Theme.accent : NSColor.white.withAlphaComponent(0.14)).cgColor
-        icon.contentTintColor = hovering ? .white : .secondaryLabelColor
-        alphaValue = hovering ? 1 : 0.8
+        let lit = hovering || active
+        layer?.backgroundColor = (active ? Theme.accent.withAlphaComponent(0.45) : (hovering ? Theme.accent.withAlphaComponent(0.28) : Theme.bar.withAlphaComponent(0.88))).cgColor
+        layer?.borderColor = (lit ? Theme.accent : NSColor.white.withAlphaComponent(0.14)).cgColor
+        icon.contentTintColor = lit ? .white : .secondaryLabelColor
+        icon.image = NSImage(systemSymbolName: active ? "list.bullet.rectangle.fill" : "list.bullet.rectangle", accessibilityDescription: "Comandos guardados")
+        toolTip = active ? "Cerrar la lista de comandos (⇧⌘K)" : "Comandos guardados (⇧⌘K)"
+        alphaValue = lit ? 1 : 0.8
     }
     override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -54,6 +59,7 @@ final class SnippetTable: NSTableView {
 /// Ventana emergente con la lista de comandos (búsqueda, insertar, agregar, editar y eliminar).
 final class SnippetsPopover: NSObject, NSPopoverDelegate, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate, NSTextFieldDelegate {
     var onPick: ((Snippet, Bool) -> Void)?       // comando, ejecutar ahora (⌥)
+    var onVisibilityChanged: ((Bool) -> Void)?   // la lista se abrió o se cerró
 
     private let popover = NSPopover()
     private let store = SnippetStore.shared
@@ -92,6 +98,9 @@ final class SnippetsPopover: NSObject, NSPopoverDelegate, NSTableViewDataSource,
     }
 
     // MARK: Mostrar
+
+    func popoverWillShow(_ notification: Notification) { onVisibilityChanged?(true) }
+    func popoverDidClose(_ notification: Notification) { onVisibilityChanged?(false) }
 
     func toggle(relativeTo rect: NSRect, of view: NSView) {
         if popover.isShown { popover.performClose(nil); return }

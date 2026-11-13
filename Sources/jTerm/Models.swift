@@ -16,6 +16,7 @@ struct Server: Identifiable, Codable, Hashable {
     var auth: AuthMethod = .password
     var keyPath = ""          // ruta a la llave privada (auth == .key)
     var env: ServerEnv?       // entorno (producción, staging…); nil = sin etiqueta
+    var jump: UUID?           // servidor guardado por el que se pasa para llegar a este (ProxyJump); nil = directo
 }
 
 /// Guarda secretos (contraseña / passphrase / clave secreta AWS) en el Keychain de macOS.
@@ -138,6 +139,7 @@ final class ServerStore {
         guard let i = servers.firstIndex(where: { $0.id == old }) else { return }
         if let secret = Keychain.read(old).secret { Keychain.set(secret, for: new); Keychain.delete(old) }
         servers[i].id = new
+        for k in servers.indices where servers[k].jump == old { servers[k].jump = new }     // quienes lo usaban de salto
     }
 
     func upsert(_ s: Server, secret: String?) {
@@ -152,23 +154,37 @@ final class ServerStore {
 
     /// Script askpass: ssh lo invoca para obtener la contraseña desde una variable de entorno,
     /// así el secreto nunca aparece en la línea de comandos ni en disco.
+    /// Para los saltos (ProxyJump) elige el secreto según a quién se le pide la contraseña: usuario@host o la llave.
+    static let askpassBody = #"""
+    #!/bin/sh
+    case "$1" in
+      *passphrase*)
+        if [ -n "$TERMINAL_KEY" ]; then
+          case "$1" in *"$TERMINAL_KEY"*) printf '%s\n' "$TERMINAL_SECRET"; exit 0;; esac
+        fi
+        for i in 1 2 3 4; do
+          eval "k=\${TERMINAL_JUMP_${i}_KEY-}"
+          if [ -n "$k" ]; then
+            case "$1" in *"$k"*) eval "printf '%s\n' \"\${TERMINAL_JUMP_${i}_SECRET-}\""; exit 0;; esac
+          fi
+        done
+        exit 1 ;;
+      *assword*)
+        for i in 1 2 3 4; do
+          eval "h=\${TERMINAL_JUMP_${i}_HOST-}"
+          if [ -n "$h" ]; then
+            case "$1" in *"$h's password"*) eval "printf '%s\n' \"\${TERMINAL_JUMP_${i}_SECRET-}\""; exit 0;; esac
+          fi
+        done
+        printf '%s\n' "$TERMINAL_SECRET" ;;
+      *) exit 1 ;;
+    esac
+
+    """#
+
     static func askpassScript() -> String {
         let url = dir.appendingPathComponent("askpass.sh")
-        // Solo responde a prompts de contraseña (o a la passphrase de la llave configurada).
-        // Cualquier otra pregunta (p. ej. confirmar el host) falla en vez de recibir la contraseña.
-        let body = """
-        #!/bin/sh
-        case "$1" in
-          *passphrase*)
-            if [ -n "$TERMINAL_KEY" ]; then
-              case "$1" in *"$TERMINAL_KEY"*) printf '%s\\n' "$TERMINAL_SECRET"; exit 0;; esac
-            fi
-            exit 1 ;;
-          *assword*) printf '%s\\n' "$TERMINAL_SECRET" ;;
-          *) exit 1 ;;
-        esac
-
-        """
+        let body = askpassBody
         if (try? String(contentsOf: url)) != body {
             try? body.write(to: url, atomically: true, encoding: .utf8)
             try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)

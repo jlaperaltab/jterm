@@ -19,7 +19,7 @@ final class TerminalFindBarView: NSVisualEffectView, NSSearchFieldDelegate {
     private let closeButton = NSButton()
     private let caseSensitiveButton = NSButton(checkboxWithTitle: "Aa", target: nil, action: nil)
     private let regexButton = NSButton(checkboxWithTitle: ".*", target: nil, action: nil)
-    private let wholeWordButton = NSButton(checkboxWithTitle: "Word", target: nil, action: nil)
+    private let wholeWordButton = NSButton(checkboxWithTitle: "Palabra", target: nil, action: nil)
 
     var searchText: String {
         get { searchField.stringValue }
@@ -56,7 +56,7 @@ final class TerminalFindBarView: NSVisualEffectView, NSSearchFieldDelegate {
         layer?.cornerRadius = 8
         layer?.masksToBounds = true
 
-        searchField.placeholderString = "Find"
+        searchField.placeholderString = "Buscar"
         searchField.delegate = self
         searchField.translatesAutoresizingMaskIntoConstraints = false
         searchField.sendsSearchStringImmediately = true
@@ -65,21 +65,21 @@ final class TerminalFindBarView: NSVisualEffectView, NSSearchFieldDelegate {
         searchField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         searchField.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        configureButton(previousButton, symbol: "chevron.up", tooltip: "Previous")
+        configureButton(previousButton, symbol: "chevron.up", tooltip: "Anterior")
         previousButton.target = self
         previousButton.action = #selector(previousTapped)
 
-        configureButton(nextButton, symbol: "chevron.down", tooltip: "Next")
+        configureButton(nextButton, symbol: "chevron.down", tooltip: "Siguiente")
         nextButton.target = self
         nextButton.action = #selector(nextTapped)
 
-        configureButton(closeButton, symbol: "xmark", tooltip: "Close")
+        configureButton(closeButton, symbol: "xmark", tooltip: "Cerrar")
         closeButton.target = self
         closeButton.action = #selector(closeTapped)
 
-        configureOptionButton(caseSensitiveButton, tooltip: "Case Sensitive")
-        configureOptionButton(regexButton, tooltip: "Regex")
-        configureOptionButton(wholeWordButton, tooltip: "Whole Word")
+        configureOptionButton(caseSensitiveButton, tooltip: "Distinguir mayúsculas")
+        configureOptionButton(regexButton, tooltip: "Expresión regular")
+        configureOptionButton(wholeWordButton, tooltip: "Palabra completa")
 
         let stack = NSStackView(views: [
             searchField,

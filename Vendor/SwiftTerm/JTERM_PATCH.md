@@ -19,3 +19,12 @@ desplazamiento copiaban y limpiaban una sola columna, dejando restos de texto al
 
 - `Mac/MacTerminalView.swift` (`returnInterceptor`, `doCommand`): gancho opcional que se consulta al pulsar Retorno; si devuelve `false`
   el Retorno no se envía. jTerm lo usa para avisar antes de ejecutar comandos delicados (`rm`, `drop`…) en pestañas de producción.
+
+- `Mac/MacFindBarView.swift`: textos de la barra de búsqueda (⌘F) traducidos al español.
+- `Mac/MacTerminalView.swift` (`linkClickInterceptor`, `mouseUp`): gancho para ⌘+clic sobre texto que no es un enlace OSC 8
+  (jTerm lo usa para abrir URLs y rutas que aparecen en la salida).
+- `Mac/JTermExtras.swift`: filas absolutas y desplazamiento (`jtermCursorAbsoluteRow`, `jtermScroll(toAbsoluteRow:)`…)
+  para saltar entre prompts.
+
+- `Apple/AppleTerminalView.swift` (`scrollTo(row:)`): marca `terminal.userScrolling` cuando la vista queda por encima del final.
+  Sin esto, mientras un comando seguía imprimiendo no se podía subir con la rueda: cada línea nueva devolvía la vista al final.

@@ -329,7 +329,7 @@ final class FormattedLogsView: NSView, NSTableViewDataSource, NSTableViewDelegat
         chipsBar.arrangedSubviews.forEach { chipsBar.removeArrangedSubview($0); $0.removeFromSuperview() }
         func chip(_ title: String, _ on: Bool, _ target: LogLevel?) {
             let b = NSButton(title: "", target: self, action: #selector(chipTapped(_:)))
-            b.isBordered = false; b.wantsLayer = true; b.layer?.cornerRadius = 13
+            b.isBordered = false; b.wantsLayer = true; b.layer?.cornerRadius = 4
             b.layer?.backgroundColor = (on ? Theme.accent.withAlphaComponent(0.25) : NSColor.white.withAlphaComponent(0.06)).cgColor
             b.layer?.borderWidth = 0.5; b.layer?.borderColor = (on ? Theme.accent : NSColor.white.withAlphaComponent(0.12)).cgColor
             b.attributedTitle = NSAttributedString(string: " \(title) ", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: on ? NSColor.white : NSColor.secondaryLabelColor])

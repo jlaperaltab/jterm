@@ -21,11 +21,14 @@
 **Terminal**
 - Pestañas con terminales locales y conexiones SSH, con barra lateral de servidores.
 - Emulación completa basada en [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm): colores de 256 y truecolor, ratón para `tmux`, `vim` y `htop`, pantalla alternativa (`nano`, `less`…).
+- **Búsqueda en el historial** (⌘F), **enlaces y rutas clicables** (⌘+clic abre la URL o el archivo; en una conexión SSH, la ruta se muestra en el gestor de archivos del servidor) y **saltos entre prompts** (⌘↑ y ⌘↓).
+- **Grabar la sesión a un archivo de texto** limpio (⌥⌘R), o automáticamente en las pestañas de producción.
 - Temas de color (jTerm, Dracula, Nord, Tokyo Night, One Dark, Gruvbox, Monokai, Solarized…), fuentes monoespaciadas, tamaño, cursor y líneas de historial configurables.
 - **Option como Meta** para saltar palabras, y **AltGr** que sigue escribiendo `@`, `|`, `#` o `~` en teclados español y latino.
 
 **Servidores y AWS**
 - Servidores guardados con usuario, puerto y llave; las contraseñas viven en el **Keychain** de macOS, nunca en un archivo.
+- **Túneles SSH guardados** (`-L` y `-R`) que se activan con un clic, y **saltos por un bastión** (ProxyJump, hasta 4 servidores encadenados) con la llave y la contraseña de cada servidor.
 - Cuentas AWS con listado de instancias EC2 y conexión mediante EC2 Instance Connect.
 - **Explorador de S3**: tu Mac a un lado y los buckets de la cuenta al otro. Navega, sube y baja archivos y carpetas (arrastrando o con las flechas), crea carpetas, renombra y elimina, y copia una **URL firmada** para compartir un objeto.
 - **Visor de logs de CloudWatch**: elige grupo y rango, filtra con patrones, filtra por prefijo de stream y activa **Seguir** para ver los eventos nuevos en vivo.
@@ -53,6 +56,10 @@
 | `⌘1` … `⌘9` | Ir a la pestaña N |
 | `⌘B` | Mostrar u ocultar la barra lateral |
 | `⇧⌘K` | Lista de comandos guardados |
+| `⌘K` | Buscar servidor, instancia, pestaña o comando |
+| `⌘F` | Buscar en el terminal (`⌘G` siguiente, `⇧⌘G` anterior) |
+| `⌘↑` / `⌘↓` | Prompt anterior / siguiente |
+| `⌥⌘R` | Grabar o detener la grabación de la sesión |
 | `⌘,` | Ajustes |
 
 ## 📦 Instalación

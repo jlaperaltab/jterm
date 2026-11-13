@@ -1,6 +1,6 @@
 import AppKit
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     var window: NSWindow!
     let tabBar = TabBar()
     let sidebar = Sidebar()
@@ -42,7 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sidebarWidth = sidebar.widthAnchor.constraint(equalToConstant: savedSidebarWidth)
         NSLayoutConstraint.activate([
             tabBar.topAnchor.constraint(equalTo: root.topAnchor), tabBar.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-            tabBar.trailingAnchor.constraint(equalTo: root.trailingAnchor), tabBar.heightAnchor.constraint(equalToConstant: 38),
+            tabBar.trailingAnchor.constraint(equalTo: root.trailingAnchor), tabBar.heightAnchor.constraint(equalToConstant: 42),
             sidebar.topAnchor.constraint(equalTo: tabBar.bottomAnchor), sidebar.bottomAnchor.constraint(equalTo: root.bottomAnchor),
             sidebar.leadingAnchor.constraint(equalTo: root.leadingAnchor), sidebarWidth,
             container.topAnchor.constraint(equalTo: tabBar.bottomAnchor), container.bottomAnchor.constraint(equalTo: root.bottomAnchor),
@@ -76,10 +76,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ])
         snippetButton.onClick = { [weak self] in self?.showSnippets() }
         snippets.onPick = { [weak self] s, run in self?.insertSnippet(s, runNow: run) }
+        snippets.onVisibilityChanged = { [weak self] shown in self?.snippetButton.active = shown }
 
         tabBar.onToggleSidebar = { [weak self] in self?.toggleSidebar() }
         sidebar.onEdit = { [weak self] s in self?.edit(s) }
         sidebar.onEditAccount = { [weak self] a in self?.editAccount(a) }
+        sidebar.onEditTunnel = { [weak self] t in self?.editTunnel(t) }
         AppState.shared.onChange = { [weak self] in self?.refresh() }
         AppState.shared.newLocal()
         applyTheme()
@@ -130,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func toggleSidebar() {
         sidebarVisible.toggle()
+        tabBar.sidebarVisible = sidebarVisible
         sidebarWidth.constant = sidebarVisible ? savedSidebarWidth : 0
         sidebar.isHidden = !sidebarVisible
         resizeHandle.isHidden = !sidebarVisible
@@ -148,6 +151,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let e = ServerEditor(server: s)
         editor = e
         e.present(on: window) { [weak self] in self?.editor = nil; self?.sidebar.reload(); self?.refresh() }
+    }
+
+    var tunnelEditor: TunnelEditor?
+    func editTunnel(_ t: Tunnel?) {
+        let e = TunnelEditor(tunnel: t, servers: AppState.shared.store.servers)
+        tunnelEditor = e
+        e.present(on: window) { [weak self] in self?.tunnelEditor = nil }
     }
 
     var accountEditor: AWSAccountEditor?
@@ -184,15 +194,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminate(_ app: NSApplication) -> NSApplication.TerminateReply {
         let active = AppState.shared.tabs.filter { $0.isConnected }
-        guard Settings.shared.confirmQuit, !active.isEmpty else { return .terminateNow }
+        let tunnels = TunnelManager.shared.activeCount
+        guard Settings.shared.confirmQuit, !active.isEmpty || tunnels > 0 else { return .terminateNow }
         let a = NSAlert()
-        a.messageText = active.count == 1 ? "Hay 1 conexión activa" : "Hay \(active.count) conexiones activas"
+        let parts = [active.isEmpty ? nil : (active.count == 1 ? "1 conexión activa" : "\(active.count) conexiones activas"),
+                     tunnels == 0 ? nil : (tunnels == 1 ? "1 túnel activo" : "\(tunnels) túneles activos")].compactMap { $0 }
+        a.messageText = "Hay " + parts.joined(separator: " y ")
         a.informativeText = "Si sales de jTerm se cerrarán."
         a.addButton(withTitle: "Salir"); a.addButton(withTitle: "Cancelar")
         return a.runModal() == .alertFirstButtonReturn ? .terminateNow : .terminateCancel
     }
 
-    func applicationWillTerminate(_ n: Notification) { AppState.shared.shutdownAll() }
+    func applicationWillTerminate(_ n: Notification) { AppState.shared.shutdownAll(); TunnelManager.shared.stopAll() }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { true }
 
@@ -227,6 +240,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         add(edit, "Copiar", #selector(NSText.copy(_:)), "c")
         add(edit, "Pegar", #selector(NSText.paste(_:)), "v")
         add(edit, "Seleccionar todo", #selector(NSText.selectAll(_:)), "a")
+        edit.addItem(.separator())
+        // Buscar en el historial del terminal: la barra de búsqueda es la del propio terminal (la reciben por la cadena de respuesta).
+        for (title, key, mods, tag) in [("Buscar…", "f", NSEvent.ModifierFlags.command, NSFindPanelAction.showFindPanel),
+                                        ("Buscar siguiente", "g", .command, .next),
+                                        ("Buscar anterior", "g", [.command, .shift], .previous),
+                                        ("Usar la selección para buscar", "e", .command, .setFindString)] {
+            let it = edit.addItem(withTitle: title, action: NSSelectorFromString("performFindPanelAction:"), keyEquivalent: key)
+            it.keyEquivalentModifierMask = mods; it.tag = Int(tag.rawValue)
+        }
+
+        let term = submenu("Terminal")
+        add(term, "Prompt anterior", #selector(prevPrompt), String(UnicodeScalar(NSUpArrowFunctionKey)!), .command, target: self)
+        add(term, "Prompt siguiente", #selector(nextPrompt), String(UnicodeScalar(NSDownArrowFunctionKey)!), .command, target: self)
+        term.addItem(.separator())
+        add(term, "Grabar sesión", #selector(toggleRecording), "r", [.command, .option], target: self)
+        add(term, "Mostrar grabaciones en Finder", #selector(revealRecordings), "", target: self)
 
         let cmds = submenu("Comandos")
         add(cmds, "Mostrar comandos guardados", #selector(showSnippets), "k", [.command, .shift], target: self)
@@ -257,6 +286,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.orderFrontStandardAboutPanel(options: [.applicationName: "jTerm", .credits: credits])
         NSApp.activate(ignoringOtherApps: true)
     }
+    // MARK: Terminal: prompts y grabación
+
+    private var terminalView: JTermTerminalView? { (AppState.shared.current as? TerminalTab)?.view as? JTermTerminalView }
+    @objc func prevPrompt() { terminalView?.jumpPrompt(-1) }
+    @objc func nextPrompt() { terminalView?.jumpPrompt(1) }
+
+    @objc func toggleRecording() {
+        guard let tab = AppState.shared.current as? TerminalTab else { return NSSound.beep() }
+        if tab.isRecording { tab.stopRecording(); return }
+        do { try tab.startRecording() }
+        catch { showAlert("No se pudo grabar la sesión", error.localizedDescription, window: window) }
+    }
+    @objc func revealRecordings() {
+        let dir = SessionRecorder.defaultDirectory
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        if let url = (AppState.shared.current as? TerminalTab)?.recordingURL { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+        else { NSWorkspace.shared.open(dir) }
+    }
+
+    /// El título de "Grabar sesión" cambia según la pestaña; los atajos de prompt solo valen en terminales.
+    @objc func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        let tab = AppState.shared.current as? TerminalTab
+        switch item.action {
+        case #selector(toggleRecording):
+            item.title = tab?.isRecording == true ? "Detener grabación" : "Grabar sesión"
+            return tab != nil
+        case #selector(prevPrompt), #selector(nextPrompt): return tab != nil
+        default: return true
+        }
+    }
+
     @MainActor @objc func checkUpdates() { Updater.shared.checkManually() }
     /// Elementos del buscador rápido (⌘K).
     func finderItems() -> [FinderItem] {
@@ -283,6 +343,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             items.append(FinderItem(kind: .snippet, title: c.title, subtitle: c.firstLine + (c.lineCount > 1 ? "  (+\(c.lineCount - 1) líneas)" : ""),
                                     symbol: "chevron.left.forwardslash.chevron.right", keywords: c.command,
                                     run: { [weak self] alt in self?.insertSnippet(c, runNow: alt) }))
+        }
+        for t in st.tunnelStore.tunnels {
+            let running = [.active, .starting].contains(TunnelManager.shared.state(of: t.id))
+            items.append(FinderItem(kind: .action, title: (running ? "Detener túnel: " : "Activar túnel: ") + t.title, subtitle: t.summary,
+                                    symbol: "point.3.connected.trianglepath.dotted", keywords: "tunel túnel ssh puerto \(t.listenPort) \(t.destHost)",
+                                    run: { [weak self] _ in AppState.shared.toggleTunnel(t, window: self?.window) }))
         }
         if let acc = acc {
             items.append(FinderItem(kind: .action, title: "Explorar S3", subtitle: "Buckets de \(acc.name.isEmpty ? acc.accessKeyId : acc.name)",

@@ -68,7 +68,7 @@ final class Settings {
             k("theme"): "jTerm", k("fontFamily"): "system", k("fontSize"): 13.0,
             k("cursorShape"): "block", k("cursorBlink"): true, k("scrollback"): 5000,
             k("optionAsMeta"): true, k("mouseReporting"): true, k("backspaceCtrlH"): false, k("term"): "xterm-256color",
-            k("confirmMultilinePaste"): true, k("warnDangerousProd"): true,
+            k("confirmMultilinePaste"): true, k("warnDangerousProd"): true, k("autoRecordProd"): false, k("underlineLinks"): true,
             k("sshKeepAlive"): 30, k("sshHostKey"): "accept-new", k("sshCompression"): false, k("sshForwardAgent"): false,
             k("defaultPort"): 22,
             k("filesLocalHidden"): false, k("filesRemoteHidden"): false, k("filesConfirmDelete"): true, k("transferDismiss"): 4,
@@ -106,6 +106,9 @@ final class Settings {
     var backspaceCtrlH: Bool { get { b("backspaceCtrlH") } set { set(newValue, "backspaceCtrlH") } }
     var termName: String { get { s("term") } set { set(newValue, "term") } }
     var confirmMultilinePaste: Bool { get { b("confirmMultilinePaste") } set { set(newValue, "confirmMultilinePaste") } }
+    var underlineLinks: Bool { get { b("underlineLinks") } set { set(newValue, "underlineLinks") } }
+    var autoRecordProd: Bool { get { b("autoRecordProd") } set { set(newValue, "autoRecordProd") } }
+    var recordingDirectory: String { get { s("recordingDir") } set { set(newValue, "recordingDir") } }
     var warnDangerousProd: Bool { get { b("warnDangerousProd") } set { set(newValue, "warnDangerousProd") } }
     // SSH
     var sshKeepAlive: Int { get { i("sshKeepAlive") } set { set(newValue, "sshKeepAlive") } }

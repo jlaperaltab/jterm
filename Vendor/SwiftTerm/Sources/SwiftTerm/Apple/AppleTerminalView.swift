@@ -1517,6 +1517,9 @@ extension TerminalView {
     func scrollTo (row: Int, notifyAccessibility: Bool = true)
     {
         let displayBuffer = terminal.displayBuffer
+        // jTerm: si el usuario se desplaza hacia arriba, la salida nueva no debe devolverlo al final (antes solo ocurría al
+        // arrastrar la barra, no con la rueda ni el trackpad). Al volver abajo se reanuda el seguimiento.
+        terminal.userScrolling = row < displayBuffer.yBase
         if row != displayBuffer.yDisp {
             terminal.setViewYDisp (row)
             

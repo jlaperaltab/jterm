@@ -2,6 +2,15 @@ import AppKit
 
 // MARK: - Pestaña individual
 
+/// Alto común de la pestaña y de los botones de la barra (barra lateral, nueva pestaña, archivos), para que se vean alineados.
+let tabBarItemHeight: CGFloat = 28
+
+/// Botón de la barra sin los márgenes de alineación que AppKit añade a los NSButton: así mide exactamente lo que se le pide
+/// y queda del mismo tamaño que las pestañas.
+final class BarButton: NSButton {
+    override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets() }
+}
+
 final class TabButton: NSView {
     let tab: Tab
     private let label = NSTextField(labelWithString: "")
@@ -15,19 +24,19 @@ final class TabButton: NSView {
         self.tab = tab
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 7
+        layer?.cornerRadius = 4
         label.stringValue = tab.title
         label.font = .systemFont(ofSize: 12)
         label.lineBreakMode = .byTruncatingTail
-        icon.image = NSImage(systemSymbolName: tab.iconName, accessibilityDescription: nil)
-        icon.symbolConfiguration = .init(pointSize: 10, weight: .regular)
+        icon.image = NSImage(systemSymbolName: tab.isRecording ? "record.circle.fill" : tab.iconName, accessibilityDescription: nil)
+        icon.symbolConfiguration = .init(pointSize: 11, weight: .regular)
         close.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Cerrar")
         close.symbolConfiguration = .init(pointSize: 9, weight: .bold)
         close.isBordered = false
         close.target = self; close.action = #selector(closeTab)
         let stack = NSStackView(views: [icon, label, close])
-        stack.spacing = 6
-        stack.edgeInsets = NSEdgeInsets(top: 5, left: 10, bottom: 5, right: 8)
+        stack.spacing = 7
+        stack.edgeInsets = NSEdgeInsets(top: 0, left: 11, bottom: 0, right: 8)
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         NSLayoutConstraint.activate([
@@ -35,7 +44,8 @@ final class TabButton: NSView {
             stack.trailingAnchor.constraint(equalTo: trailingAnchor),
             stack.topAnchor.constraint(equalTo: topAnchor),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
-            label.widthAnchor.constraint(lessThanOrEqualToConstant: 160),
+            label.widthAnchor.constraint(lessThanOrEqualToConstant: 190),
+            heightAnchor.constraint(equalToConstant: tabBarItemHeight),
         ])
         if let env = tab.env {      // franja inferior con el color del entorno
             envBar.wantsLayer = true; envBar.layer?.cornerRadius = 1; envBar.layer?.backgroundColor = env.color.cgColor
@@ -52,10 +62,20 @@ final class TabButton: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     private func refresh() {
-        let envTint = tab.env?.color.withAlphaComponent(active ? 0.22 : (hovering ? 0.12 : 0.07))
-        layer?.backgroundColor = (envTint ?? (active ? Theme.bg : (hovering ? Theme.hover : .clear))).cgColor
+        // Cada pestaña es una "pastilla" con fondo y borde propios, para ver dónde empieza y termina; la activa destaca más.
+        let bg: NSColor, border: NSColor
+        if let env = tab.env {
+            bg = env.color.withAlphaComponent(active ? 0.26 : (hovering ? 0.16 : 0.10))
+            border = env.color.withAlphaComponent(active ? 0.70 : 0.32)
+        } else {
+            bg = NSColor.white.withAlphaComponent(active ? 0.15 : (hovering ? 0.09 : 0.045))
+            border = NSColor.white.withAlphaComponent(active ? 0.26 : 0.09)
+        }
+        layer?.backgroundColor = bg.cgColor
+        layer?.borderColor = border.cgColor
+        layer?.borderWidth = 1
         let c: NSColor = active ? .white : .secondaryLabelColor
-        label.textColor = c; icon.contentTintColor = tab.isConnected ? .systemGreen : c; close.contentTintColor = c
+        label.textColor = c; icon.contentTintColor = tab.isRecording ? .systemRed : (tab.isConnected ? .systemGreen : c); close.contentTintColor = c
         close.alphaValue = (hovering || active) ? 1 : 0
     }
     override func mouseEntered(with e: NSEvent) { hovering = true }
@@ -69,23 +89,43 @@ final class TabButton: NSView {
 final class TabBar: NSView {
     private let stack = NSStackView()
     var onToggleSidebar: (() -> Void)?
-    private let filesButton = NSButton()
+    private let filesButton = BarButton()
+    private let toggleButton = BarButton()
+    /// Refleja si la barra lateral está visible: el botón se resalta mientras lo está.
+    var sidebarVisible = true { didSet { updateToggle() } }
+    /// Mismo aspecto de "pastilla" que las pestañas y el botón de la barra lateral.
+    private func stylePill(_ b: BarButton) {
+        b.isBordered = false; b.wantsLayer = true
+        b.layer?.cornerRadius = 4; b.layer?.borderWidth = 1
+        b.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.045).cgColor
+        b.layer?.borderColor = NSColor.white.withAlphaComponent(0.09).cgColor
+        b.contentTintColor = .secondaryLabelColor
+        b.symbolConfiguration = .init(pointSize: 12, weight: .regular)
+    }
+    private func updateToggle() {
+        toggleButton.contentTintColor = sidebarVisible ? Theme.accent : .secondaryLabelColor
+        toggleButton.layer?.backgroundColor = (sidebarVisible ? Theme.accent.withAlphaComponent(0.20) : NSColor.white.withAlphaComponent(0.045)).cgColor
+        toggleButton.layer?.borderColor = (sidebarVisible ? Theme.accent.withAlphaComponent(0.55) : NSColor.white.withAlphaComponent(0.09)).cgColor
+        toggleButton.toolTip = sidebarVisible ? "Ocultar la barra lateral (⌘B)" : "Mostrar la barra lateral (⌘B)"
+    }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
         layer?.backgroundColor = Theme.bar.cgColor
-        let toggle = NSButton(image: NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: "Servidores")!,
-                              target: self, action: #selector(toggle))
-        toggle.isBordered = false; toggle.contentTintColor = .secondaryLabelColor
-        let plus = NSButton(image: NSImage(systemSymbolName: "plus", accessibilityDescription: "Nueva pestaña")!,
-                            target: self, action: #selector(newTab))
-        plus.isBordered = false; plus.contentTintColor = .secondaryLabelColor
+        let toggle = toggleButton
+        toggle.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: "Servidores")
+        toggle.target = self; toggle.action = #selector(self.toggle)
+        toggle.isBordered = false; toggle.wantsLayer = true; toggle.layer?.cornerRadius = 4; toggle.layer?.borderWidth = 1
+        let plus = BarButton()
+        plus.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "Nueva pestaña")
+        plus.target = self; plus.action = #selector(newTab)
+        stylePill(plus)
         filesButton.image = NSImage(systemSymbolName: "arrow.left.arrow.right.square", accessibilityDescription: "Transferir archivos")
-        filesButton.isBordered = false; filesButton.contentTintColor = .secondaryLabelColor
+        stylePill(filesButton)
         filesButton.toolTip = "Transferir archivos de esta conexión"
         filesButton.target = self; filesButton.action = #selector(openFiles)
-        stack.spacing = 4
+        stack.spacing = 6
         let row = NSStackView(views: [toggle, stack, plus, filesButton])
         row.spacing = 10
         row.translatesAutoresizingMaskIntoConstraints = false
@@ -94,7 +134,11 @@ final class TabBar: NSView {
             row.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 78), // botones de la ventana
             row.centerYAnchor.constraint(equalTo: centerYAnchor),
             row.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -8),
+            toggle.widthAnchor.constraint(equalToConstant: tabBarItemHeight), toggle.heightAnchor.constraint(equalToConstant: tabBarItemHeight),
+            plus.widthAnchor.constraint(equalToConstant: tabBarItemHeight), plus.heightAnchor.constraint(equalToConstant: tabBarItemHeight),
+            filesButton.widthAnchor.constraint(equalToConstant: tabBarItemHeight), filesButton.heightAnchor.constraint(equalToConstant: tabBarItemHeight),
         ])
+        updateToggle()
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -119,16 +163,18 @@ final class Sidebar: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenuD
     private let table = NSTableView()
     private let serversView = NSView()
     let aws = AWSPanel()
+    let tunnels = TunnelsPanel()
     private var store: ServerStore { AppState.shared.store }
     var onEdit: ((Server?) -> Void)?
     var onEditAccount: ((AWSAccount?) -> Void)? { didSet { aws.onEditAccount = onEditAccount } }
+    var onEditTunnel: ((Tunnel?) -> Void)? { didSet { tunnels.onEdit = onEditTunnel } }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
         layer?.backgroundColor = Theme.bar.withAlphaComponent(0.6).cgColor
 
-        let seg = NSSegmentedControl(labels: ["Servidores", "AWS"], trackingMode: .selectOne,
+        let seg = NSSegmentedControl(labels: ["Servidores", "AWS", "Túneles"], trackingMode: .selectOne,
                                      target: self, action: #selector(switchTab(_:)))
         seg.selectedSegment = 0; seg.segmentStyle = .texturedRounded
 
@@ -163,14 +209,14 @@ final class Sidebar: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenuD
             scroll.bottomAnchor.constraint(equalTo: serversView.bottomAnchor),
         ])
 
-        aws.isHidden = true
-        for v in [seg, serversView, aws] { v.translatesAutoresizingMaskIntoConstraints = false; addSubview(v) }
+        aws.isHidden = true; tunnels.isHidden = true
+        for v in [seg, serversView, aws, tunnels] as [NSView] { v.translatesAutoresizingMaskIntoConstraints = false; addSubview(v) }
         NSLayoutConstraint.activate([
             seg.topAnchor.constraint(equalTo: topAnchor, constant: 8),
             seg.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
             seg.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
         ])
-        for v in [serversView, aws] as [NSView] {
+        for v in [serversView, aws, tunnels] as [NSView] {
             NSLayoutConstraint.activate([
                 v.topAnchor.constraint(equalTo: seg.bottomAnchor, constant: 8),
                 v.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -182,9 +228,9 @@ final class Sidebar: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenuD
     required init?(coder: NSCoder) { fatalError() }
 
     @objc private func switchTab(_ s: NSSegmentedControl) {
-        let showAWS = s.selectedSegment == 1
-        serversView.isHidden = showAWS; aws.isHidden = !showAWS
-        if showAWS { aws.activate() }
+        let i = s.selectedSegment
+        serversView.isHidden = i != 0; aws.isHidden = i != 1; tunnels.isHidden = i != 2
+        if i == 1 { aws.activate() }
     }
 
     func reload() { table.reloadData(); aws.reloadRows() }

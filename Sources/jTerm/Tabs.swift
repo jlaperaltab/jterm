@@ -9,10 +9,137 @@ final class JTermTerminalView: LocalProcessTerminalView {
     /// Entorno de la conexión (producción activa los avisos de comandos delicados) y nombre para los diálogos.
     var env: ServerEnv?
     var envName = ""
+    /// Si no es nil, todo lo que llega del proceso se guarda también en este archivo.
+    var recorder: SessionRecorder?
+    /// ⌘+clic sobre una URL o ruta de la salida (línea bajo el cursor y columna).
+    var linkHandler: ((String, Int) -> Bool)?
+    /// Filas absolutas donde el usuario pulsó Retorno (los prompts), para saltar entre ellos.
+    private(set) var promptRows: [Int] = []
+    /// En una conexión SSH las rutas son del servidor: solo cuentan las absolutas (o con ~), y no se comprueba que existan.
+    var isRemote = false
+
+    private let overlay = LinkOverlay()
+    private var hover: (row: Int, range: Range<Int>)?
+    private var refreshPending = false
+    private var monitor: Any?
 
     override init(frame: NSRect) {
         super.init(frame: frame)
         returnInterceptor = { [weak self] in self?.approveReturn() ?? true }
+        linkClickInterceptor = { [weak self] line, col in self?.linkHandler?(line, col) ?? false }
+        overlay.frame = bounds; overlay.autoresizingMask = [.width, .height]
+        addSubview(overlay)
+        // ⌘ pulsado o ratón en movimiento: se actualiza el enlace subrayado bajo el cursor
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged, .mouseMoved, .mouseExited]) { [weak self] e in
+            if let self, e.window != nil, e.window === self.window { self.updateHover() }
+            return e
+        }
+    }
+    deinit { if let monitor { NSEvent.removeMonitor(monitor) } }
+    override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); scheduleLinkRefresh() }
+    override func setFrameSize(_ newSize: NSSize) { super.setFrameSize(newSize); scheduleLinkRefresh() }
+
+    // MARK: Enlaces subrayados
+
+    func linkMatch(in line: String, column: Int) -> LinkDetector.Match? {
+        guard let m = LinkDetector.match(in: line, column: column, allowBareFilenames: !isRemote) else { return nil }
+        if isRemote, case .path(let p, _) = m.target, !(p.hasPrefix("/") || p.hasPrefix("~")) { return nil }
+        return m
+    }
+
+    func scheduleLinkRefresh() {
+        guard !refreshPending else { return }
+        refreshPending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in self?.refreshLinks() }
+    }
+
+    private func refreshLinks() {
+        refreshPending = false
+        let cell = jtermCellSize
+        let t = getTerminal()
+        guard cell.width > 0, cell.height > 0 else { return }
+        func rect(_ row: Int, _ r: Range<Int>) -> NSRect {
+            NSRect(x: CGFloat(r.lowerBound) * cell.width, y: frame.height - CGFloat(row + 1) * cell.height,
+                   width: CGFloat(r.count) * cell.width, height: cell.height)
+        }
+        var out: [LinkOverlay.Line] = []
+        if Settings.shared.underlineLinks, !t.isCurrentBufferAlternate {        // en vim, htop… no se toca la pantalla
+            for row in 0..<t.rows {
+                guard let text = t.getLine(row: row)?.translateToString(trimRight: true), text.contains("://") else { continue }
+                for u in LinkDetector.urlMatches(in: text) where hover?.row != row || hover?.range != u.range {
+                    out.append(.init(rect: rect(row, u.range), strong: false))
+                }
+            }
+        }
+        if let h = hover { out.append(.init(rect: rect(h.row, h.range), strong: true)) }
+        overlay.lines = out
+    }
+
+    private func setHover(_ h: (row: Int, range: Range<Int>)?) {
+        let changed = hover?.row != h?.row || hover?.range != h?.range
+        hover = h
+        if h != nil { NSCursor.pointingHand.set() }
+        if changed { refreshLinks() }
+    }
+
+    /// Con ⌘ pulsado, subraya (más marcado) el enlace o ruta que hay bajo el cursor.
+    private func updateHover() {
+        guard let window, NSEvent.modifierFlags.contains(.command) else { return setHover(nil) }
+        let p = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        let cell = jtermCellSize
+        guard bounds.contains(p), cell.width > 0, cell.height > 0 else { return setHover(nil) }
+        let col = Int(p.x / cell.width), row = Int((frame.height - p.y) / cell.height)
+        let t = getTerminal()
+        guard row >= 0, row < t.rows, let text = t.getLine(row: row)?.translateToString(trimRight: true),
+              let m = linkMatch(in: text, column: col) else { return setHover(nil) }
+        setHover((row, m.range))
+    }
+
+    // La salida cambia o se desplaza: hay que volver a calcular qué subrayar
+    override func rangeChanged(source: TerminalView, startY: Int, endY: Int) { super.rangeChanged(source: source, startY: startY, endY: endY); scheduleLinkRefresh() }
+    override func scrolled(source: TerminalView, position: Double) { super.scrolled(source: source, position: position); scheduleLinkRefresh() }
+
+    /// Antes de entregar la salida al terminal se copia (limpia) al archivo de grabación. Las aplicaciones de pantalla
+    /// completa (vim, htop…) no se graban: solo dejarían texto desordenado.
+    override func dataReceived(slice: ArraySlice<UInt8>) {
+        defer { scheduleLinkRefresh() }                 // llegó salida nueva: hay que volver a subrayar las URLs
+        guard let rec = recorder else { super.dataReceived(slice: slice); return }
+        let t = getTerminal()
+        let wasAlt = t.isCurrentBufferAlternate
+        super.dataReceived(slice: slice)
+        let isAlt = t.isCurrentBufferAlternate
+        if !wasAlt && !isAlt { rec.write(slice) }
+        else if !wasAlt && isAlt { rec.note("[aplicación de pantalla completa]") }
+        else if wasAlt && !isAlt { rec.note("[fin de la aplicación de pantalla completa]") }
+    }
+
+    /// Al escribir algo con el historial desplazado, se vuelve al final (como en Terminal.app). Las teclas de control
+    /// (flechas, respuestas del terminal…) no lo hacen: empiezan por ESC.
+    override func send(source: TerminalView, data: ArraySlice<UInt8>) {
+        if jtermIsScrolledUp, let first = data.first, first != 0x1b { jtermScrollToBottom() }
+        super.send(source: source, data: data)
+    }
+
+    // MARK: Saltar entre prompts
+
+    private func markPrompt() {
+        guard !getTerminal().isCurrentBufferAlternate else { return }
+        let row = jtermCursorAbsoluteRow(), oldest = jtermOldestAbsoluteRow()
+        promptRows.removeAll { $0 < oldest }
+        if promptRows.last != row { promptRows.append(row) }
+    }
+
+    /// direction -1 = prompt anterior, +1 = siguiente (o el final si no hay más).
+    func jumpPrompt(_ direction: Int) {
+        let top = jtermTopAbsoluteRow(), oldest = jtermOldestAbsoluteRow()
+        if direction < 0 {
+            guard let target = promptRows.last(where: { $0 < top && $0 >= oldest }) else { return NSSound.beep() }
+            jtermScroll(toAbsoluteRow: target)
+        } else if let target = promptRows.first(where: { $0 > top }) {
+            jtermScroll(toAbsoluteRow: target)
+        } else {
+            jtermScrollToBottom()
+        }
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -55,6 +182,7 @@ final class JTermTerminalView: LocalProcessTerminalView {
     /// Al pulsar Retorno en una pestaña de producción, revisa la línea que se va a ejecutar (lo que se ve en pantalla,
     /// así que cubre lo escrito, el historial y el autocompletado). Devuelve false para no enviar el Retorno.
     private func approveReturn() -> Bool {
+        markPrompt()
         guard inProd else { return true }
         let t = getTerminal()
         guard !t.isCurrentBufferAlternate else { return true }      // vim, nano, less…
@@ -105,10 +233,15 @@ protocol Tab: AnyObject {
     var isConnected: Bool { get }
     /// Entorno de la conexión (para colorear la pestaña); nil si no tiene.
     var env: ServerEnv? { get }
+    /// true mientras la sesión se está grabando a un archivo.
+    var isRecording: Bool { get }
     func shutdown()
 }
 
-extension Tab { var env: ServerEnv? { nil } }
+extension Tab {
+    var env: ServerEnv? { nil }
+    var isRecording: Bool { false }
+}
 
 final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
     let id = UUID()
@@ -118,7 +251,9 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
     var onExit: ((Tab) -> Void)?
     var fileTarget: (() async throws -> SSHTarget)?
     var connectionKey: String?
-    var env: ServerEnv? { didSet { applyEnv() } }
+    var env: ServerEnv? { didSet { applyEnv(); if env == .prod, Settings.shared.autoRecordProd, recorder == nil { try? startRecording() } } }
+    private(set) var recorder: SessionRecorder?
+    var isRecording: Bool { recorder != nil }
     private(set) var connected = false
     var isConnected: Bool { connected }
     /// ssh ejecuta LocalCommand solo cuando la autenticación fue exitosa: imprime un título que detectamos.
@@ -127,7 +262,7 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
     var content: NSView { view }
     var focusView: NSView { view }
     var iconName: String { isSSH ? "network" : "terminal" }
-    func shutdown() {}
+    func shutdown() { stopRecording() }
     var closesOnExit = true
 
     init(title: String, executable: String, args: [String], env: [String: String] = [:], isSSH: Bool = false) {
@@ -136,6 +271,8 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
         view = JTermTerminalView(frame: NSRect(x: 0, y: 0, width: 800, height: 500))
         super.init()
         view.processDelegate = self
+        (view as? JTermTerminalView)?.linkHandler = { [weak self] line, col in self?.handleLinkClick(line: line, column: col) ?? false }
+        (view as? JTermTerminalView)?.isRemote = isSSH
         applySettings()
         var environment = Terminal.getEnvironmentVariables(termName: Settings.shared.termName)
         for (k, v) in env { environment.append("\(k)=\(v)") }
@@ -147,6 +284,52 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
     deinit { NotificationCenter.default.removeObserver(self) }
     @objc private func settingsChanged() { applySettings() }
     func applyEnv() { (view as? JTermTerminalView).map { $0.env = env; $0.envName = title } }
+
+    // MARK: Grabación
+
+    func startRecording() throws {
+        guard recorder == nil else { return }
+        let r = try SessionRecorder(directory: SessionRecorder.defaultDirectory, title: title, env: env)
+        recorder = r
+        (view as? JTermTerminalView)?.recorder = r
+        AppState.shared.onChange?()
+    }
+    func stopRecording() {
+        guard let r = recorder else { return }
+        (view as? JTermTerminalView)?.recorder = nil
+        recorder = nil
+        r.stop()
+        AppState.shared.onChange?()
+    }
+    var recordingURL: URL? { recorder?.url }
+
+    // MARK: Enlaces y rutas (⌘+clic)
+
+    /// Abre la URL o ruta que hay bajo el cursor. En pestañas locales la ruta se abre con la app predeterminada;
+    /// en pestañas SSH la ruta es del servidor, así que se muestra en el gestor de archivos de esa conexión.
+    func handleLinkClick(line: String, column: Int) -> Bool {
+        guard let target = LinkDetector.target(in: line, column: column, allowBareFilenames: !isSSH) else { return false }
+        switch target {
+        case .url(let url):
+            NSWorkspace.shared.open(url); return true
+        case .path(let raw, _):
+            if isSSH {
+                guard raw.hasPrefix("/") || raw.hasPrefix("~"), fileTarget != nil, let make = fileTarget else { NSSound.beep(); return true }
+                AppState.shared.openFiles(key: connectionKey, startPath: raw, make)
+                return true
+            }
+            var path = (raw as NSString).expandingTildeInPath
+            if !path.hasPrefix("/") {
+                let pid = view.process.shellPid
+                let base = pid > 0 ? currentDirectory(ofProcess: pid) : nil
+                path = ((base ?? NSHomeDirectory()) as NSString).appendingPathComponent(path)
+            }
+            path = (path as NSString).standardizingPath
+            guard FileManager.default.fileExists(atPath: path) else { NSSound.beep(); return true }
+            NSWorkspace.shared.open(URL(fileURLWithPath: path))
+            return true
+        }
+    }
 
     private var appliedTheme = "", appliedFont = ""
 
@@ -180,6 +363,7 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
         view.optionAsMetaKey = s.optionAsMeta
         view.allowMouseReporting = s.mouseReporting
         view.backspaceSendsControlH = s.backspaceCtrlH
+        (view as? JTermTerminalView)?.scheduleLinkRefresh()
     }
 
     static func local() -> TerminalTab {
@@ -187,7 +371,7 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
         return TerminalTab(title: "Local", executable: s.resolvedShell, args: s.loginShell ? ["-l"] : [])
     }
 
-    static func ssh(_ s: Server, keychain: (secret: String?, status: OSStatus)) -> TerminalTab {
+    static func ssh(_ s: Server, keychain: (secret: String?, status: OSStatus), jump: JumpSetup = JumpSetup()) -> TerminalTab {
         var args = ["-p", String(s.port)] + SSHSettings.args() + markerArgs
         var env: [String: String] = [:]
         if s.auth == .key, !s.keyPath.isEmpty {
@@ -195,6 +379,8 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
             args += ["-i", path, "-o", "IdentitiesOnly=yes"]
             env["TERMINAL_KEY"] = path
         }
+        args += jump.options
+        for (k, v) in jump.env { env[k] = v }
         let (stored, status) = keychain
         var warning: String?
         if let secret = stored {
@@ -251,7 +437,9 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
     func processTerminated(source: TerminalView, exitCode: Int32?) {
         DispatchQueue.main.async {
             self.connected = false
-            if self.closesOnExit || exitCode == 0 { self.onExit?(self); return }
+            self.stopRecording()
+            // Una conexión SSH nunca cierra su pestaña sola (un reinicio del servidor la corta con código 0 y se perdería la salida)
+            if self.closesOnExit || (exitCode == 0 && !self.isSSH) { self.onExit?(self); return }
             AppState.shared.onChange?()
             let code = exitCode.map(String.init) ?? "?"
             self.view.feed(text: "\r\n\u{1b}[31m[jTerm] La conexión terminó (código \(code)). Cierra la pestaña con ⌘W.\u{1b}[0m\r\n")
@@ -272,6 +460,7 @@ final class AppState {
     private(set) var selected: UUID?
     let store = ServerStore()
     let awsStore = AWSStore()
+    let tunnelStore = TunnelStore()
     var onChange: (() -> Void)?
 
     var current: Tab? { tabs.first { $0.id == selected } }
@@ -283,6 +472,20 @@ final class AppState {
         onChange?()
     }
     func newLocal() { add(TerminalTab.local()) }
+
+    /// Inicia o detiene un túnel guardado (un clic).
+    func toggleTunnel(_ t: Tunnel, window: NSWindow? = nil) {
+        switch TunnelManager.shared.state(of: t.id) {
+        case .starting, .active:
+            TunnelManager.shared.stop(t.id)
+        case .stopped, .failed:
+            if let e = t.validationError() { return showAlert("Túnel no válido", e, window: window) }
+            guard let server = store.servers.first(where: { $0.id == t.serverId }) else {
+                return showAlert("Falta el servidor", "El servidor de este túnel ya no existe. Edita el túnel y elige otro.", window: window)
+            }
+            TunnelManager.shared.start(t, server: server)
+        }
+    }
     func openS3(account: AWSAccount, credentials: @escaping () throws -> AWSCredentials) {
         add(S3Tab(account: account, credentials: credentials))
     }
@@ -291,15 +494,17 @@ final class AppState {
     }
     func connect(_ s: Server) {
         // El Keychain puede mostrar un diálogo de autorización: leerlo fuera del hilo principal.
+        let servers = store.servers
         DispatchQueue.global(qos: .userInitiated).async {
             let kc = Keychain.read(s.id)
-            DispatchQueue.main.async { self.add(TerminalTab.ssh(s, keychain: kc)) }
+            let jump = SSHJump.setup(for: s, servers: servers)
+            DispatchQueue.main.async { self.add(TerminalTab.ssh(s, keychain: kc, jump: jump)) }
         }
     }
 
     /// Abre el gestor de archivos (local | servidor) para el destino indicado.
-    func openFiles(key: String?, _ make: @escaping () async throws -> SSHTarget) {
-        add(FileTab(key: key, provider: make))
+    func openFiles(key: String?, startPath: String? = nil, _ make: @escaping () async throws -> SSHTarget) {
+        add(FileTab(key: key, provider: make, startPath: startPath))
     }
     func openFilesForCurrent() {
         if let make = current?.fileTarget { openFiles(key: current?.connectionKey, make) }
