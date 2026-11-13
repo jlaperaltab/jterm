@@ -111,11 +111,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             let v = tab.content
             v.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(v)
+            // Solo el terminal lleva margen; logs, archivos y S3 ocupan todo el contenedor.
+            let pad = tab is TerminalTab
             NSLayoutConstraint.activate([
-                v.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 14),
+                v.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: pad ? 14 : 0),
                 v.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-                v.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
-                v.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -6),
+                v.topAnchor.constraint(equalTo: container.topAnchor, constant: pad ? 8 : 0),
+                v.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: pad ? -6 : 0),
             ])
             shown = tab
         }
@@ -170,6 +172,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc func applyTheme() {
         container.layer?.backgroundColor = Settings.shared.theme.bgColor.cgColor
         updateSnippetButton()
+        tabBar.reload(); sidebar.reload()   // reaplica el color de acento
     }
 
     /// El botón solo se muestra en pestañas de terminal y si el ajuste lo permite.

@@ -263,6 +263,7 @@ final class FormattedLogsView: NSView, NSTableViewDataSource, NSTableViewDelegat
 
     override init(frame: NSRect) {
         super.init(frame: frame)
+        NotificationCenter.default.addObserver(self, selector: #selector(accentChanged), name: Settings.accentDidChange, object: nil)
         chipsBar.orientation = .horizontal; chipsBar.spacing = 6; chipsBar.alignment = .centerY
         chipsBar.edgeInsets = NSEdgeInsets(top: 8, left: 14, bottom: 8, right: 14)
         let col = NSTableColumn(identifier: .init("l")); col.resizingMask = .autoresizingMask
@@ -281,6 +282,7 @@ final class FormattedLogsView: NSView, NSTableViewDataSource, NSTableViewDelegat
         ])
     }
     required init?(coder: NSCoder) { fatalError() }
+    @objc private func accentChanged() { rebuildChips() }
 
     override func layout() {
         super.layout()

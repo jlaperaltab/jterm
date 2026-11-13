@@ -129,7 +129,7 @@ final class SyncManager: SyncLocalAdapter {
     // MARK: Adaptador: lectura y escritura de los datos locales (se ejecuta en un hilo de fondo)
 
     private static let syncedPrefs = [
-        "loginShell", "confirmClose", "confirmQuit", "sidebarAtLaunch", "showSnippetsButton", "theme", "fontFamily", "fontSize",
+        "loginShell", "confirmClose", "confirmQuit", "sidebarAtLaunch", "showSnippetsButton", "theme", "accent", "fontFamily", "fontSize",
         "cursorShape", "cursorBlink", "scrollback", "optionAsMeta", "mouseReporting", "backspaceCtrlH", "term", "confirmMultilinePaste", "warnDangerousProd", "autoRecordProd", "underlineLinks",
         "sshKeepAlive", "sshHostKey", "sshCompression", "sshForwardAgent", "sshExtra", "defaultUser", "defaultPort",
         "filesLocalHidden", "filesRemoteHidden", "filesConfirmDelete", "transferDismiss", "awsRegion", "awsUser", "awsRegions",
@@ -246,6 +246,7 @@ final class SyncManager: SyncLocalAdapter {
                         if let v = f[k] { d.set(anyValue(v), forKey: "pref." + k) } else { d.removeObject(forKey: "pref." + k) }
                     }
                     NotificationCenter.default.post(name: Settings.didChange, object: nil)
+                    NotificationCenter.default.post(name: Settings.accentDidChange, object: nil)
                 default: break
                 }
             }

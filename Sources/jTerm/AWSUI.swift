@@ -494,6 +494,7 @@ final class AWSAccountEditor: NSObject {
 
     func present(on window: NSWindow, done: @escaping () -> Void) {
         self.done = done
+        setTabOrder([name, akid] + secretF.tabViews + [region], in: panel)
         window.beginSheet(panel) { _ in }
         panel.makeFirstResponder(name)
     }

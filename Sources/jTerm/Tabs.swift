@@ -450,7 +450,8 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
 enum Theme {
     static let bg = NSColor(srgbRed: 0.09, green: 0.10, blue: 0.12, alpha: 1)
     static let bar = NSColor(srgbRed: 0.07, green: 0.08, blue: 0.09, alpha: 1)
-    static let accent = NSColor(srgbRed: 0.36, green: 0.62, blue: 1.0, alpha: 1)
+    /// Color de acento elegido en Ajustes ▸ Apariencia.
+    static var accent: NSColor { Settings.shared.accentColor }
     static let hover = NSColor.white.withAlphaComponent(0.07)
 }
 

@@ -16,9 +16,11 @@ final class Callback: NSObject {
 // MARK: - Controles
 
 /// Campo de texto compacto con el estilo de los formularios.
-final class CompactField: NSView {
+final class CompactField: NSView, NSTextFieldDelegate {
     let field = FocusField()
     var onCommit: ((String) -> Void)?
+    /// Tab / Mayús+Tab explícitos (si no se asignan, se usa el orden normal de AppKit).
+    var onTab: (() -> Void)?, onBacktab: (() -> Void)?
     private let box = NSView()
 
     init(value: String, placeholder: String, width: CGFloat, mono: Bool = false) {
@@ -32,7 +34,7 @@ final class CompactField: NSView {
         field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [
             .foregroundColor: NSColor.white.withAlphaComponent(0.28), .font: field.font!])
         field.lineBreakMode = .byTruncatingHead
-        field.target = self; field.action = #selector(commit)
+        field.target = self; field.action = #selector(commit); field.delegate = self
         field.onFocus = { [weak self] on in self?.setFocused(on); if !on { self?.commit() } }
         for v in [box, field] { v.translatesAutoresizingMaskIntoConstraints = false }
         addSubview(box); box.addSubview(field)
@@ -47,6 +49,11 @@ final class CompactField: NSView {
     }
     required init?(coder: NSCoder) { fatalError() }
     func setValue(_ s: String) { field.stringValue = s }
+    func control(_ c: NSControl, textView: NSTextView, doCommandBy sel: Selector) -> Bool {
+        if sel == #selector(NSResponder.insertTab(_:)), let f = onTab { f(); return true }
+        if sel == #selector(NSResponder.insertBacktab(_:)), let f = onBacktab { f(); return true }
+        return false
+    }
     private func setFocused(_ on: Bool) {
         box.layer?.backgroundColor = NSColor.white.withAlphaComponent(on ? 0.07 : 0.05).cgColor
         box.layer?.borderColor = (on ? Theme.accent : NSColor.white.withAlphaComponent(0.10)).cgColor
@@ -55,8 +62,32 @@ final class CompactField: NSView {
 }
 
 /// Campo de varias líneas (opciones avanzadas).
+/// Vista de texto que avisa cuando gana o pierde el foco.
+final class FocusTextView: NSTextView {
+    var onFocus: ((Bool) -> Void)?
+    override func becomeFirstResponder() -> Bool {
+        let ok = super.becomeFirstResponder()
+        if ok {
+            onFocus?(true)
+            if selectedRange().location == NSNotFound { setSelectedRange(NSRange(location: 0, length: 0)) }
+            // El cursor no se dibuja solo con el texto vacío dentro de un popover: se fuerza.
+            DispatchQueue.main.async { [weak self] in
+                self?.updateInsertionPointStateAndRestartTimer(true); self?.needsDisplay = true
+            }
+        }
+        return ok
+    }
+    override func resignFirstResponder() -> Bool {
+        let ok = super.resignFirstResponder(); if ok { onFocus?(false) }; return ok
+    }
+    override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
+        var r = rect; r.size.width = max(r.size.width, 2)
+        super.drawInsertionPoint(in: r, color: Theme.accent, turnedOn: flag)
+    }
+}
+
 final class NotesField: NSView, NSTextViewDelegate {
-    private let text = NSTextView()
+    private let text = FocusTextView()
     private let box = NSView()
     var onCommit: ((String) -> Void)?
 
@@ -73,6 +104,13 @@ final class NotesField: NSView, NSTextViewDelegate {
         text.isAutomaticTextReplacementEnabled = false; text.isAutomaticSpellingCorrectionEnabled = false
         text.textContainerInset = NSSize(width: 4, height: 6)
         text.delegate = self
+        text.insertionPointColor = Theme.accent
+        text.onFocus = { [weak self] on in
+            guard let b = self?.box else { return }
+            b.layer?.backgroundColor = NSColor.white.withAlphaComponent(on ? 0.07 : 0.05).cgColor
+            b.layer?.borderColor = (on ? Theme.accent : NSColor.white.withAlphaComponent(0.10)).cgColor
+        }
+        text.frame = NSRect(x: 0, y: 0, width: width - 4, height: height - 4)   // sin esto el cursor no se dibuja con el texto vacío
         let scroll = NSScrollView(); scroll.documentView = text
         scroll.drawsBackground = false; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true
         text.minSize = NSSize(width: 0, height: height); text.isVerticallyResizable = true
@@ -90,6 +128,19 @@ final class NotesField: NSView, NSTextViewDelegate {
     }
     required init?(coder: NSCoder) { fatalError() }
     var value: String { text.string }
+    /// La vista de texto, para encadenarla en el orden de Tab.
+    var textView: NSView { text }
+    var onTab: (() -> Void)?, onBacktab: (() -> Void)?
+    /// Tab y Mayús+Tab cambian de campo; ⌥Tab inserta un tabulador.
+    func textView(_ tv: NSTextView, doCommandBy sel: Selector) -> Bool {
+        switch sel {
+        case #selector(NSResponder.insertTab(_:)):
+            if let f = onTab { f() } else { tv.window?.selectNextKeyView(nil) }; return true
+        case #selector(NSResponder.insertBacktab(_:)):
+            if let f = onBacktab { f() } else { tv.window?.selectPreviousKeyView(nil) }; return true
+        default: return false
+        }
+    }
     func textDidEndEditing(_ n: Notification) { onCommit?(text.string) }
 }
 
@@ -178,6 +229,7 @@ final class SettingsTabButton: NSView {
         label = NSTextField(labelWithString: title)
         icon = NSImageView(image: NSImage(systemSymbolName: symbol, accessibilityDescription: nil)!)
         super.init(frame: .zero)
+        NotificationCenter.default.addObserver(self, selector: #selector(accentChanged), name: Settings.accentDidChange, object: nil)
         wantsLayer = true; layer?.cornerRadius = 8
         label.font = .systemFont(ofSize: 13, weight: .medium)
         icon.symbolConfiguration = .init(pointSize: 13, weight: .medium)
@@ -194,6 +246,7 @@ final class SettingsTabButton: NSView {
         refresh()
     }
     required init?(coder: NSCoder) { fatalError() }
+    @objc private func accentChanged() { refresh() }
     private func refresh() {
         layer?.backgroundColor = (selected ? Theme.accent.withAlphaComponent(0.20) : (hovering ? Theme.hover : .clear)).cgColor
         label.textColor = selected ? .white : .secondaryLabelColor
@@ -479,6 +532,8 @@ final class SettingsWindow: NSObject {
         return [
             section("Apariencia", [
                 row("Tema de colores", nil, choice(themes, themes.firstIndex(of: s.themeName) ?? 0, width: 190) { [s] in s.themeName = themes[$0] }),
+                row("Color de acento", "Botones, selección y resaltados de la app. Algunos detalles cambian al reabrir jTerm.",
+                    choice(Settings.accents.map(\.name), Settings.accents.firstIndex { $0.name == s.accentName } ?? 0, width: 150) { [s] in s.accentName = Settings.accents[$0].name }),
                 row("Fuente", "Solo se muestran fuentes monoespaciadas.",
                     choice(["Sistema (SF Mono)"] + fams, famIdx, width: 230) { [s] i in s.fontFamily = i == 0 ? "system" : fams[i - 1] }),
                 row("Tamaño de fuente", nil, stepper(s.fontSize, 9, 32, format: { "\($0) pt" }) { [s] in s.fontSize = $0 }),

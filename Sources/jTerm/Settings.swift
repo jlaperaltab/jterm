@@ -59,13 +59,14 @@ struct TerminalTheme {
 final class Settings {
     static let shared = Settings()
     static let didChange = Notification.Name("jterm.settings.didChange")
+    static let accentDidChange = Notification.Name("jterm.settings.accentDidChange")
     private let d = UserDefaults.standard
     private static let prefix = "pref."
 
     private init() {
         d.register(defaults: [
             k("loginShell"): true, k("confirmClose"): true, k("confirmQuit"): true, k("sidebarAtLaunch"): true, k("showSnippetsButton"): true,
-            k("theme"): "jTerm", k("fontFamily"): "system", k("fontSize"): 13.0,
+            k("theme"): "jTerm", k("accent"): "Azul", k("fontFamily"): "system", k("fontSize"): 13.0,
             k("cursorShape"): "block", k("cursorBlink"): true, k("scrollback"): 5000,
             k("optionAsMeta"): true, k("mouseReporting"): true, k("backspaceCtrlH"): false, k("term"): "xterm-256color",
             k("confirmMultilinePaste"): true, k("warnDangerousProd"): true, k("autoRecordProd"): false, k("underlineLinks"): true,
@@ -96,6 +97,22 @@ final class Settings {
     var showSnippetsButton: Bool { get { b("showSnippetsButton") } set { set(newValue, "showSnippetsButton") } }
     // Terminal
     var themeName: String { get { s("theme") } set { set(newValue, "theme") } }
+    /// Colores de acento disponibles (nombre → hex).
+    static let accents: [(name: String, hex: String)] = [
+        ("Azul", "#5c9eff"), ("Violeta", "#a78bfa"), ("Rosa", "#f472b6"), ("Rojo", "#f87171"),
+        ("Naranja", "#fb923c"), ("Amarillo", "#facc15"), ("Verde", "#4ade80"), ("Turquesa", "#2dd4bf"),
+    ]
+    var accentName: String { get { s("accent") } set { set(newValue, "accent"); NotificationCenter.default.post(name: Self.accentDidChange, object: nil) } }
+    private(set) lazy var accentCache: (String, NSColor) = ("", .systemBlue)
+    var accentColor: NSColor {
+        let name = accentName
+        if accentCache.0 == name { return accentCache.1 }
+        let hex = Self.accents.first { $0.name == name }?.hex ?? Self.accents[0].hex
+        let v = Int(hex.dropFirst(), radix: 16) ?? 0x5c9eff
+        let c = NSColor(srgbRed: CGFloat((v >> 16) & 255) / 255, green: CGFloat((v >> 8) & 255) / 255, blue: CGFloat(v & 255) / 255, alpha: 1)
+        accentCache = (name, c)
+        return c
+    }
     var fontFamily: String { get { s("fontFamily") } set { set(newValue, "fontFamily") } }
     var fontSize: Int { get { d.double(forKey: k("fontSize")) > 0 ? Int(d.double(forKey: k("fontSize"))) : 13 } set { set(Double(newValue), "fontSize") } }
     var cursorShape: String { get { s("cursorShape") } set { set(newValue, "cursorShape") } }
@@ -159,6 +176,7 @@ final class Settings {
     func resetAll() {
         for key in d.dictionaryRepresentation().keys where key.hasPrefix(Self.prefix) { d.removeObject(forKey: key) }
         changed()
+        NotificationCenter.default.post(name: Self.accentDidChange, object: nil)
     }
 
     /// Shells instalados (de /etc/shells).

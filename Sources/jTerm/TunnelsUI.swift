@@ -233,6 +233,7 @@ final class TunnelEditor: NSObject {
 
     func present(on window: NSWindow, done: @escaping () -> Void) {
         self.done = done
+        setTabOrder([name, listen, host, port], in: panel)
         window.beginSheet(panel) { _ in }
         panel.makeFirstResponder(name)
     }

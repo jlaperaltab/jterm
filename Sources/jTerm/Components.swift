@@ -53,6 +53,7 @@ final class Dropdown: NSView {
 
     init(symbol: String?) {
         super.init(frame: .zero)
+        NotificationCenter.default.addObserver(self, selector: #selector(accentChanged), name: Settings.accentDidChange, object: nil)
         wantsLayer = true
         layer?.cornerRadius = 8; layer?.borderWidth = 1
         translatesAutoresizingMaskIntoConstraints = false
@@ -80,6 +81,7 @@ final class Dropdown: NSView {
         style(); updateTitle()
     }
     required init?(coder: NSCoder) { fatalError() }
+    @objc private func accentChanged() { style() }
 
     private func updateTitle() {
         label.stringValue = titleOfSelected ?? placeholder

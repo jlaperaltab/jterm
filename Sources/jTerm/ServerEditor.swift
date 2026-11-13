@@ -18,6 +18,12 @@ final class SecureFocusField: NSSecureTextField {
     override func textDidEndEditing(_ n: Notification) { super.textDidEndEditing(n); onFocus?(false) }
 }
 
+/// Orden de Tab explícito (cíclico) entre los campos de un formulario; los ocultos se saltan solos.
+func setTabOrder(_ views: [NSView], in panel: NSWindow) {
+    for (i, v) in views.enumerated() { v.nextKeyView = views[(i + 1) % views.count] }
+    panel.initialFirstResponder = views.first
+}
+
 /// Etiqueta pequeña + caja redondeada con borde que se ilumina con el foco.
 final class StyledField: NSStackView {
     let box = NSView()
@@ -27,6 +33,9 @@ final class StyledField: NSStackView {
     private var eye: IconButton?
     /// Para campos revelables: valor guardado a mostrar cuando el campo está vacío (p. ej. al editar una cuenta).
     var loadSecret: (() -> String?)?
+
+    /// Campos que participan en el orden de Tab (el visible y el oculto de una contraseña).
+    var tabViews: [NSView] { [secure, plain].compactMap { $0 } }
 
     /// Valor actual del campo, esté visible u oculto.
     var secretValue: String {
@@ -261,6 +270,7 @@ final class ServerEditor: NSObject {
 
     func present(on window: NSWindow, done: @escaping () -> Void) {
         self.done = done
+        setTabOrder([name, host, port, user, key] + secretField.tabViews, in: panel)
         window.beginSheet(panel) { _ in }
         panel.makeFirstResponder(name)
     }

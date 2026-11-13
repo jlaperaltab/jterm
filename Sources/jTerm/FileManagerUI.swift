@@ -88,6 +88,7 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
         self.kind = kind
         showHidden = kind == .local ? Settings.shared.filesLocalHidden : Settings.shared.filesRemoteHidden
         super.init(frame: .zero)
+        NotificationCenter.default.addObserver(self, selector: #selector(accentChanged), name: Settings.accentDidChange, object: nil)
         wantsLayer = true
         layer?.cornerRadius = 10; layer?.borderWidth = 1
         layer?.backgroundColor = NSColor.white.withAlphaComponent(0.03).cgColor
@@ -96,6 +97,7 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
         table.registerForDraggedTypes(kind == .local ? [.jRemote] : [.jLocal, .fileURL])
     }
     required init?(coder: NSCoder) { fatalError() }
+    @objc private func accentChanged() { table.reloadData() }
 
     func setTitle(_ s: String) { titleLabel.stringValue = s }
 

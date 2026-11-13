@@ -111,6 +111,7 @@ final class TabBar: NSView {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
+        NotificationCenter.default.addObserver(self, selector: #selector(accentChanged), name: Settings.accentDidChange, object: nil)
         wantsLayer = true
         layer?.backgroundColor = Theme.bar.cgColor
         let toggle = toggleButton
@@ -141,6 +142,7 @@ final class TabBar: NSView {
         updateToggle()
     }
     required init?(coder: NSCoder) { fatalError() }
+    @objc private func accentChanged() { updateToggle(); reload() }
 
     func reload() {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }

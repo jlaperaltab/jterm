@@ -12,6 +12,7 @@ final class SnippetButton: NSView {
 
     init() {
         super.init(frame: .zero)
+        NotificationCenter.default.addObserver(self, selector: #selector(accentChanged), name: Settings.accentDidChange, object: nil)
         wantsLayer = true
         layer?.cornerRadius = 18; layer?.borderWidth = 1
         layer?.shadowColor = NSColor.black.cgColor; layer?.shadowOpacity = 0.35
@@ -30,6 +31,7 @@ final class SnippetButton: NSView {
         refresh()
     }
     required init?(coder: NSCoder) { fatalError() }
+    @objc private func accentChanged() { refresh() }
 
     private func refresh() {
         let lit = hovering || active
@@ -74,6 +76,7 @@ final class SnippetsPopover: NSObject, NSPopoverDelegate, NSTableViewDataSource,
     private var notes: NotesField?
     private var runSwitch: NSSwitch?
     private var editing: Snippet?
+    private var tabMonitor: Any?
     var isShown: Bool { popover.isShown }
 
     override init() {
@@ -94,6 +97,15 @@ final class SnippetsPopover: NSObject, NSPopoverDelegate, NSTableViewDataSource,
             ])
         }
         NSLayoutConstraint.activate([root.widthAnchor.constraint(equalToConstant: 390), root.heightAnchor.constraint(equalToConstant: 470)])
+        // Tab entre Nombre y Comando, sin depender del orden de vistas ni de quién tenga el foco primero.
+        tabMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
+            guard let self, e.keyCode == 48, self.popover.isShown, !self.editView.isHidden,
+                  let win = self.root.window, win.isKeyWindow,
+                  !e.modifierFlags.contains(.option), !e.modifierFlags.contains(.command), !e.modifierFlags.contains(.control),
+                  let name = self.nameField?.field, let cmd = self.notes?.textView else { return e }
+            win.makeFirstResponder(win.firstResponder === cmd ? name : cmd)
+            return nil
+        }
         NotificationCenter.default.addObserver(self, selector: #selector(storeChanged), name: .snippetsDidChange, object: nil)
     }
 
@@ -290,8 +302,16 @@ final class SnippetsPopover: NSObject, NSPopoverDelegate, NSTableViewDataSource,
             form.trailingAnchor.constraint(equalTo: editView.trailingAnchor, constant: -20),
             buttons.widthAnchor.constraint(equalTo: form.widthAnchor),
         ])
+        // Tab explícito entre los dos campos (no depende del orden de vistas del popover).
+        name.onTab = { [weak self, weak cmd] in if let t = cmd?.textView { self?.root.window?.makeFirstResponder(t) } }
+        name.onBacktab = name.onTab
+        cmd.onTab = { [weak self, weak name] in if let f = name?.field { self?.root.window?.makeFirstResponder(f) } }
+        cmd.onBacktab = cmd.onTab
         listView.isHidden = true; editView.isHidden = false
-        DispatchQueue.main.async { [weak self] in self?.root.window?.makeFirstResponder(s == nil ? name.field : nil) }
+        DispatchQueue.main.async { [weak self] in
+            self?.root.window?.makeKey()
+            self?.root.window?.makeFirstResponder(name.field)
+        }
     }
 
     @objc private func cancelEdit() { showList(); reload() }
