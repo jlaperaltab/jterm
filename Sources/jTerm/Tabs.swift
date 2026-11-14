@@ -18,6 +18,13 @@ final class JTermTerminalView: LocalProcessTerminalView {
     /// En una conexión SSH las rutas son del servidor: solo cuentan las absolutas (o con ~), y no se comprueba que existan.
     var isRemote = false
 
+    /// Avisa cuando este terminal recibe el foco (para marcarlo como panel activo).
+    var onFocus: (() -> Void)?
+    /// Si no es nil, lo que el usuario escribe o pega se reenvía también a los demás paneles.
+    var broadcastSink: ((ArraySlice<UInt8>) -> Void)?
+    /// true mientras se procesa una tecla o un pegado del usuario (las respuestas automáticas del terminal no se reenvían).
+    private var userInput = false
+
     private let overlay = LinkOverlay()
     private var hover: (row: Int, range: Range<Int>)?
     private var refreshPending = false
@@ -118,6 +125,18 @@ final class JTermTerminalView: LocalProcessTerminalView {
     override func send(source: TerminalView, data: ArraySlice<UInt8>) {
         if jtermIsScrolledUp, let first = data.first, first != 0x1b { jtermScrollToBottom() }
         super.send(source: source, data: data)
+        if userInput { broadcastSink?(data) }
+    }
+
+    override func keyDown(with event: NSEvent) {
+        userInput = true; defer { userInput = false }
+        super.keyDown(with: event)
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        let ok = super.becomeFirstResponder()
+        if ok { onFocus?() }
+        return ok
     }
 
     // MARK: Saltar entre prompts
@@ -181,7 +200,7 @@ final class JTermTerminalView: LocalProcessTerminalView {
 
     /// Al pulsar Retorno en una pestaña de producción, revisa la línea que se va a ejecutar (lo que se ve en pantalla,
     /// así que cubre lo escrito, el historial y el autocompletado). Devuelve false para no enviar el Retorno.
-    private func approveReturn() -> Bool {
+    func approveReturn() -> Bool {
         markPrompt()
         guard inProd else { return true }
         let t = getTerminal()
@@ -206,6 +225,7 @@ final class JTermTerminalView: LocalProcessTerminalView {
     }
 
     func pasteText(_ raw: String) {
+        userInput = true; defer { userInput = false }
         var text = raw.replacingOccurrences(of: "\r\n", with: "\r").replacingOccurrences(of: "\n", with: "\r")
         let bracketed = getTerminal().bracketedPasteMode
         if bracketed {
@@ -235,12 +255,15 @@ protocol Tab: AnyObject {
     var env: ServerEnv? { get }
     /// true mientras la sesión se está grabando a un archivo.
     var isRecording: Bool { get }
+    /// ¿Esta pestaña tiene una conexión abierta a ese servidor? (una pestaña con paneles puede tener varias)
+    func hasConnection(to key: String) -> Bool
     func shutdown()
 }
 
 extension Tab {
     var env: ServerEnv? { nil }
     var isRecording: Bool { false }
+    func hasConnection(to key: String) -> Bool { connectionKey == key && isConnected }
 }
 
 final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
@@ -265,7 +288,7 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
     func shutdown() { stopRecording() }
     var closesOnExit = true
 
-    init(title: String, executable: String, args: [String], env: [String: String] = [:], isSSH: Bool = false) {
+    init(title: String, executable: String, args: [String], env: [String: String] = [:], isSSH: Bool = false, startDirectory: String? = nil) {
         self.title = title
         self.isSSH = isSSH
         view = JTermTerminalView(frame: NSRect(x: 0, y: 0, width: 800, height: 500))
@@ -277,12 +300,26 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
         var environment = Terminal.getEnvironmentVariables(termName: Settings.shared.termName)
         for (k, v) in env { environment.append("\(k)=\(v)") }
         view.startProcess(executable: executable, args: args, environment: environment,
-                          currentDirectory: isSSH ? nil : Settings.shared.resolvedStartDirectory)
+                          currentDirectory: isSSH ? nil : (startDirectory ?? Settings.shared.resolvedStartDirectory))
         NotificationCenter.default.addObserver(self, selector: #selector(settingsChanged), name: Settings.didChange, object: nil)
     }
 
     deinit { NotificationCenter.default.removeObserver(self) }
     @objc private func settingsChanged() { applySettings() }
+    /// Crea otra sesión igual a esta (mismo servidor, o una shell local en la misma carpeta) para un panel nuevo.
+    var cloneFactory: (() -> TerminalTab)?
+    func makeSibling() -> TerminalTab {
+        guard let make = cloneFactory else { return TerminalTab.local(startDirectory: currentWorkingDirectory) }
+        let t = make()
+        t.env = env
+        return t
+    }
+    /// Carpeta actual de la shell local (nil en conexiones remotas).
+    var currentWorkingDirectory: String? {
+        guard !isSSH else { return nil }
+        let pid = view.process.shellPid
+        return pid > 0 ? currentDirectory(ofProcess: pid) : nil
+    }
     func applyEnv() { (view as? JTermTerminalView).map { $0.env = env; $0.envName = title } }
 
     // MARK: Grabación
@@ -366,9 +403,9 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
         (view as? JTermTerminalView)?.scheduleLinkRefresh()
     }
 
-    static func local() -> TerminalTab {
+    static func local(startDirectory: String? = nil) -> TerminalTab {
         let s = Settings.shared
-        return TerminalTab(title: "Local", executable: s.resolvedShell, args: s.loginShell ? ["-l"] : [])
+        return TerminalTab(title: "Local", executable: s.resolvedShell, args: s.loginShell ? ["-l"] : [], startDirectory: startDirectory)
     }
 
     static func ssh(_ s: Server, keychain: (secret: String?, status: OSStatus), jump: JumpSetup = JumpSetup()) -> TerminalTab {
@@ -398,6 +435,7 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
         tab.fileTarget = { await SSHTargets.server(s) }
         tab.connectionKey = "server:\(s.id.uuidString)"
         tab.env = s.env
+        tab.cloneFactory = { TerminalTab.ssh(s, keychain: keychain, jump: jump) }
         if let warning { tab.view.feed(text: "\u{1b}[33m\(warning)\u{1b}[0m\r\n") }
         return tab
     }
@@ -410,6 +448,7 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
         let tab = TerminalTab(title: i.name, executable: "/usr/bin/ssh", args: args, isSSH: true)
         tab.closesOnExit = false
         tab.connectionKey = "aws:\(i.id)"
+        tab.cloneFactory = { TerminalTab.awsSSH(i, user: user, keyPath: keyPath) }
         return tab
     }
 
@@ -423,6 +462,7 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
                               env: env, isSSH: true)
         tab.closesOnExit = false
         tab.connectionKey = "aws:\(i.id)"
+        tab.cloneFactory = { TerminalTab.awsSSM(i, creds: creds, awsPath: awsPath) }
         tab.connected = true   // SSM no ejecuta LocalCommand: se considera conectada mientras el proceso vive
         return tab
     }
@@ -465,6 +505,9 @@ final class AppState {
     var onChange: (() -> Void)?
 
     var current: Tab? { tabs.first { $0.id == selected } }
+    /// La pestaña actual, si tiene paneles de terminal, y el panel de terminal con el foco.
+    var currentSplit: SplitTab? { current as? SplitTab }
+    var activeTerminal: TerminalTab? { currentSplit?.active }
 
     func add(_ tab: Tab) {
         tab.onExit = { [weak self] t in self?.close(t) }
@@ -472,6 +515,8 @@ final class AppState {
         selected = tab.id
         onChange?()
     }
+    /// Una terminal nueva siempre vive dentro de una pestaña con paneles (de uno solo hasta que se divida).
+    func add(_ terminal: TerminalTab) { add(SplitTab(terminal)) }
     func newLocal() { add(TerminalTab.local()) }
 
     /// Inicia o detiene un túnel guardado (un clic).
@@ -513,7 +558,7 @@ final class AppState {
 
     /// ¿Hay alguna pestaña con conexión abierta a este servidor?
     func isConnected(key: String) -> Bool {
-        tabs.contains { $0.connectionKey == key && $0.isConnected }
+        tabs.contains { $0.hasConnection(to: key) }
     }
 
     /// Cierra una pestaña pidiendo confirmación si tiene una conexión activa (según los ajustes).

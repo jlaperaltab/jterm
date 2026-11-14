@@ -28,3 +28,10 @@ desplazamiento copiaban y limpiaban una sola columna, dejando restos de texto al
 
 - `Apple/AppleTerminalView.swift` (`scrollTo(row:)`): marca `terminal.userScrolling` cuando la vista queda por encima del final.
   Sin esto, mientras un comando seguía imprimiendo no se podía subir con la rueda: cada línea nueva devolvía la vista al final.
+
+- `Mac/MacTerminalView.swift` (`becomeFirstResponder`, `keyDown`): pasan de `public` a `open` para poder sobrescribirlos desde jTerm
+  (marcar el panel activo al recibir el foco y reenviar lo escrito a los demás paneles).
+
+- `Mac/MacTerminalView.swift` (`jtermResizeLocked`, `applySizeNow`): bloqueo de cambios de tamaño mientras jTerm reorganiza los paneles
+  (la vista pasaba por tamaños como 1×2 que llegaban al servidor y descuadraban el prompt de bash), y las vistas de menos de 40×30 puntos
+  no redimensionan la pantalla.

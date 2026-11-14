@@ -20,6 +20,7 @@
 
 **Terminal**
 - Pestañas con terminales locales y conexiones SSH, con barra lateral de servidores.
+- **Paneles divididos** dentro de una pestaña (⌘D a la derecha, ⇧⌘D hacia abajo): una sesión SSH se duplica al mismo servidor, y se puede navegar con el teclado, redimensionar arrastrando, maximizar un panel y **escribir en todos los paneles a la vez**.
 - Emulación completa basada en [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm): colores de 256 y truecolor, ratón para `tmux`, `vim` y `htop`, pantalla alternativa (`nano`, `less`…).
 - **Búsqueda en el historial** (⌘F), **enlaces y rutas clicables** (⌘+clic abre la URL o el archivo; en una conexión SSH, la ruta se muestra en el gestor de archivos del servidor) y **saltos entre prompts** (⌘↑ y ⌘↓).
 - **Grabar la sesión a un archivo de texto** limpio (⌥⌘R), o automáticamente en las pestañas de producción.
@@ -51,7 +52,11 @@
 
 | Atajo | Acción |
 | --- | --- |
-| `⌘T` / `⌘W` | Nueva pestaña / cerrar pestaña |
+| `⌘T` / `⌘W` | Nueva pestaña / cerrar panel (o la pestaña si tiene un solo panel) |
+| `⌘D` / `⇧⌘D` | Dividir el panel a la derecha / hacia abajo |
+| `⌥⌘←→↑↓` | Ir al panel de esa dirección (`⌘]` y `⌘[`: siguiente y anterior) |
+| `⇧⌘↩` | Maximizar o restaurar el panel |
+| `⌥⌘I` | Escribir en todos los paneles |
 | `⇧⌘]` / `⇧⌘[` | Pestaña siguiente / anterior |
 | `⌘1` … `⌘9` | Ir a la pestaña N |
 | `⌘B` | Mostrar u ocultar la barra lateral |

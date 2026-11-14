@@ -112,7 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             v.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(v)
             // Solo el terminal lleva margen; logs, archivos y S3 ocupan todo el contenedor.
-            let pad = tab is TerminalTab
+            let pad = tab is SplitTab
             NSLayoutConstraint.activate([
                 v.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: pad ? 14 : 0),
                 v.trailingAnchor.constraint(equalTo: container.trailingAnchor),
@@ -177,18 +177,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     /// El botón solo se muestra en pestañas de terminal y si el ajuste lo permite.
     func updateSnippetButton() {
-        snippetButton.isHidden = !(AppState.shared.current is TerminalTab) || !Settings.shared.showSnippetsButton
+        snippetButton.isHidden = !(AppState.shared.current is SplitTab) || !Settings.shared.showSnippetsButton
     }
 
     @objc func showSnippets() {
-        guard AppState.shared.current is TerminalTab else { NSSound.beep(); return }
+        guard AppState.shared.current is SplitTab else { NSSound.beep(); return }
         // Mismo lugar que el botón, aunque esté oculto por el ajuste.
         snippets.toggle(relativeTo: NSRect(x: container.bounds.maxX - 22 - 36, y: 14, width: 36, height: 36), of: container)
     }
 
     /// Pega el comando en la consola activa; lo ejecuta si el comando lo pide o con ⌥.
     func insertSnippet(_ s: Snippet, runNow: Bool) {
-        guard let tab = AppState.shared.current as? TerminalTab, let v = tab.view as? JTermTerminalView else { NSSound.beep(); return }
+        guard let tab = AppState.shared.activeTerminal, let v = tab.view as? JTermTerminalView else { NSSound.beep(); return }
         guard v.approvePaste(s.command, fromSnippet: true) else { return }
         v.pasteText(s.command.trimmingCharacters(in: .newlines))
         if s.autoRun || runNow { v.send([0x0d]) }
@@ -237,7 +237,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
         let file = submenu("Archivo")
         add(file, "Nueva pestaña", #selector(newTab), "t", target: self)
-        add(file, "Cerrar pestaña", #selector(closeTab), "w", target: self)
+        add(file, "Cerrar panel o pestaña", #selector(closePane), "w", target: self)
+        add(file, "Cerrar pestaña entera", #selector(closeTab), "w", [.command, .option], target: self)
 
         let edit = submenu("Edición")
         add(edit, "Copiar", #selector(NSText.copy(_:)), "c")
@@ -259,6 +260,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         term.addItem(.separator())
         add(term, "Grabar sesión", #selector(toggleRecording), "r", [.command, .option], target: self)
         add(term, "Mostrar grabaciones en Finder", #selector(revealRecordings), "", target: self)
+
+        let panes = submenu("Paneles")
+        let arrow = { (c: Int) in String(UnicodeScalar(c)!) }
+        add(panes, "Dividir a la derecha", #selector(splitRight), "d", target: self)
+        add(panes, "Dividir hacia abajo", #selector(splitDown), "d", [.command, .shift], target: self)
+        add(panes, "Dividir a la derecha con terminal local", #selector(splitRightLocal), "", target: self)
+        add(panes, "Dividir hacia abajo con terminal local", #selector(splitDownLocal), "", target: self)
+        panes.addItem(.separator())
+        add(panes, "Ir al panel de la izquierda", #selector(focusLeft), arrow(NSLeftArrowFunctionKey), [.command, .option], target: self)
+        add(panes, "Ir al panel de la derecha", #selector(focusRight), arrow(NSRightArrowFunctionKey), [.command, .option], target: self)
+        add(panes, "Ir al panel de arriba", #selector(focusUp), arrow(NSUpArrowFunctionKey), [.command, .option], target: self)
+        add(panes, "Ir al panel de abajo", #selector(focusDown), arrow(NSDownArrowFunctionKey), [.command, .option], target: self)
+        add(panes, "Panel siguiente", #selector(nextPane), "]", target: self)
+        add(panes, "Panel anterior", #selector(prevPane), "[", target: self)
+        panes.addItem(.separator())
+        add(panes, "Maximizar panel", #selector(toggleZoomPane), "\r", [.command, .shift], target: self)
+        add(panes, "Igualar tamaños", #selector(equalizePanes), "=", [.command, .control], target: self)
+        add(panes, "Escribir en todos los paneles", #selector(toggleBroadcast), "i", [.command, .option], target: self)
 
         let cmds = submenu("Comandos")
         add(cmds, "Mostrar comandos guardados", #selector(showSnippets), "k", [.command, .shift], target: self)
@@ -291,12 +310,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
     // MARK: Terminal: prompts y grabación
 
-    private var terminalView: JTermTerminalView? { (AppState.shared.current as? TerminalTab)?.view as? JTermTerminalView }
+    private var terminalView: JTermTerminalView? { AppState.shared.activeTerminal?.view as? JTermTerminalView }
     @objc func prevPrompt() { terminalView?.jumpPrompt(-1) }
     @objc func nextPrompt() { terminalView?.jumpPrompt(1) }
 
     @objc func toggleRecording() {
-        guard let tab = AppState.shared.current as? TerminalTab else { return NSSound.beep() }
+        guard let tab = AppState.shared.activeTerminal else { return NSSound.beep() }
         if tab.isRecording { tab.stopRecording(); return }
         do { try tab.startRecording() }
         catch { showAlert("No se pudo grabar la sesión", error.localizedDescription, window: window) }
@@ -304,18 +323,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc func revealRecordings() {
         let dir = SessionRecorder.defaultDirectory
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        if let url = (AppState.shared.current as? TerminalTab)?.recordingURL { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+        if let url = AppState.shared.activeTerminal?.recordingURL { NSWorkspace.shared.activateFileViewerSelecting([url]) }
         else { NSWorkspace.shared.open(dir) }
     }
 
     /// El título de "Grabar sesión" cambia según la pestaña; los atajos de prompt solo valen en terminales.
     @objc func validateMenuItem(_ item: NSMenuItem) -> Bool {
-        let tab = AppState.shared.current as? TerminalTab
+        let tab = AppState.shared.activeTerminal
+        let split = AppState.shared.currentSplit
+        let many = (split?.panes.count ?? 0) > 1
         switch item.action {
         case #selector(toggleRecording):
             item.title = tab?.isRecording == true ? "Detener grabación" : "Grabar sesión"
             return tab != nil
         case #selector(prevPrompt), #selector(nextPrompt): return tab != nil
+        case #selector(splitRight), #selector(splitDown), #selector(splitRightLocal), #selector(splitDownLocal): return split != nil
+        case #selector(closePane):
+            item.title = many ? "Cerrar panel" : "Cerrar pestaña"
+            return split != nil
+        case #selector(focusLeft), #selector(focusRight), #selector(focusUp), #selector(focusDown),
+             #selector(nextPane), #selector(prevPane), #selector(equalizePanes): return many
+        case #selector(toggleZoomPane):
+            item.title = split?.zoomed != nil ? "Restaurar tamaño del panel" : "Maximizar panel"
+            return many
+        case #selector(toggleBroadcast):
+            item.state = split?.broadcast == true ? .on : .off
+            return many
         default: return true
         }
     }
@@ -366,6 +399,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc func showFinder() { QuickFinder.shared.toggle(over: window, items: finderItems()) }
     @objc func openSettings() { SettingsWindow.shared.show() }
     @objc func newTab() { AppState.shared.newLocal() }
+    @objc func splitRight() { AppState.shared.currentSplit?.split(sideBySide: true, clone: true) }
+    @objc func splitDown() { AppState.shared.currentSplit?.split(sideBySide: false, clone: true) }
+    @objc func splitRightLocal() { AppState.shared.currentSplit?.split(sideBySide: true, clone: false) }
+    @objc func splitDownLocal() { AppState.shared.currentSplit?.split(sideBySide: false, clone: false) }
+    @objc func closePane() {
+        if let s = AppState.shared.currentSplit { s.requestClosePane() }
+        else if let t = AppState.shared.current { AppState.shared.requestClose(t) }
+    }
+    @objc func focusLeft() { AppState.shared.currentSplit?.focus(.left) }
+    @objc func focusRight() { AppState.shared.currentSplit?.focus(.right) }
+    @objc func focusUp() { AppState.shared.currentSplit?.focus(.up) }
+    @objc func focusDown() { AppState.shared.currentSplit?.focus(.down) }
+    @objc func nextPane() { AppState.shared.currentSplit?.cycle(1) }
+    @objc func prevPane() { AppState.shared.currentSplit?.cycle(-1) }
+    @objc func toggleZoomPane() { AppState.shared.currentSplit?.toggleZoom() }
+    @objc func equalizePanes() { AppState.shared.currentSplit?.equalize() }
+    @objc func toggleBroadcast() { AppState.shared.currentSplit?.toggleBroadcast() }
     @objc func closeTab() { if let t = AppState.shared.current { AppState.shared.requestClose(t) } }
     @objc func nextTab() { AppState.shared.step(1) }
     @objc func prevTab() { AppState.shared.step(-1) }

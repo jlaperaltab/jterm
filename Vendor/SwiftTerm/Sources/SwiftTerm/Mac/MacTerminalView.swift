@@ -538,7 +538,14 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     private var lastSizeApplied = Date.distantPast
     private var pendingSizeApply: DispatchWorkItem?
 
+    /// jTerm: mientras es true no se avisa al programa de cambios de tamaño (se reorganizan paneles y la vista pasa por
+    /// tamaños intermedios). Al volver a false se aplica una sola vez el tamaño final.
+    public var jtermResizeLocked = false {
+        didSet { if oldValue && !jtermResizeLocked { applySizeNow() } }
+    }
+
     private func applySizeChangeThrottled() {
+        if jtermResizeLocked { return }
         let elapsed = Date().timeIntervalSince(lastSizeApplied)
         if resizeThrottle <= 0 || (elapsed >= resizeThrottle && pendingSizeApply == nil) {
             applySizeNow()
@@ -553,6 +560,9 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     private func applySizeNow() {
         pendingSizeApply?.cancel()
         pendingSizeApply = nil
+        // Una vista casi sin tamaño (aún sin colocar, u oculta) reduciría la pantalla a 1×2 y el shell remoto redibujaría
+        // el prompt a ese ancho: se ignora.
+        guard frame.width >= 40, frame.height >= 30 else { return }
         lastSizeApplied = Date()
         processSizeChange(newSize: frame.size)
     }
@@ -587,7 +597,7 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     //
     // NSTextInputClient protocol implementation
     //
-    public override func becomeFirstResponder() -> Bool {
+    open override func becomeFirstResponder() -> Bool {
         let response = super.becomeFirstResponder()
         if response {
             hasFocus = true
@@ -717,7 +727,7 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
         return false
     }
 
-    public override func keyDown(with event: NSEvent) {
+    open override func keyDown(with event: NSEvent) {
         selection.active = false
         let eventFlags = event.modifierFlags
         
