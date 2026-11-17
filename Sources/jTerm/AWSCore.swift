@@ -172,7 +172,7 @@ enum AWSClient {
         let p = EC2Parser(region: "")
         let xp = XMLParser(data: data); xp.delegate = p; xp.parse()
         if let m = p.errorMessage { return m + (p.errorCode.map { " (\($0))" } ?? "") }
-        return "Error HTTP \(status)"
+        return L("Error HTTP %d", status)
     }
 
     static func describeInstances(_ c: AWSCredentials, region: String) async throws -> [EC2Instance] {
@@ -210,7 +210,7 @@ enum AWSClient {
                              accessKey: c.accessKey, secret: c.secret)
         let data = try await perform(req)
         if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], obj["Success"] as? Bool == false {
-            throw AWSError(message: "AWS rechazó la llave pública (¿usuario del sistema incorrecto?).")
+            throw AWSError(message: L("AWS rechazó la llave pública (¿usuario del sistema incorrecto?)."))
         }
     }
 }
@@ -279,7 +279,7 @@ extension AWSClient {
     static func logsHint(for message: String) -> String {
         let m = message.lowercased()
         if m.contains("not authorized") || m.contains("accessdenied") || m.contains("is not authorized to perform") {
-            return message + "\n\nPermisos IAM necesarios: logs:DescribeLogGroups y logs:FilterLogEvents."
+            return message + "\n\n" + L("Permisos IAM necesarios: logs:DescribeLogGroups y logs:FilterLogEvents.")
         }
         return message
     }

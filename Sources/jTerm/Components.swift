@@ -164,7 +164,7 @@ final class ConnectedBadge: NSView {
         dot.translatesAutoresizingMaskIntoConstraints = false
         dot.widthAnchor.constraint(equalToConstant: 6).isActive = true
         dot.heightAnchor.constraint(equalToConstant: 6).isActive = true
-        let l = NSTextField(labelWithString: "Conectado")
+        let l = NSTextField(labelWithString: L("Conectado"))
         l.font = .systemFont(ofSize: 9, weight: .semibold); l.textColor = .systemGreen
         let s = NSStackView(views: [dot, l]); s.spacing = 4
         s.edgeInsets = NSEdgeInsets(top: 2, left: 6, bottom: 2, right: 7)

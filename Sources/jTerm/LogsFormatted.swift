@@ -60,7 +60,7 @@ enum LogRowRenderer {
                 }
                 add(s, c)
             }
-            if budget <= 0 { add("\n… (usa “Copiar JSON” para ver todo)", dim) }
+            if budget <= 0 { add(L("\n… (usa “Copiar JSON” para ver todo)"), dim) }
             return out
         }
         if p.lines.count > 1 {
@@ -70,7 +70,7 @@ enum LogRowRenderer {
                 let isLast = i == extra.count - 1
                 add(l + (i < shown.count - 1 ? "\n" : ""), (p.level == .error && isLast) ? NSColor(hex: th.ansi[9]) : (p.level == .error ? dim : th.fgColor))
             }
-            if extra.count > 80 { add("\n… \(extra.count - 80) líneas más", dim) }
+            if extra.count > 80 { add(L("\n… %d líneas más", extra.count - 80), dim) }
             return out
         }
         if !fits { add(p.json != nil ? p.lines[0] : p.summary, th.fgColor); return out }
@@ -107,17 +107,17 @@ enum LogRowRenderer {
                 fg.withAlphaComponent(0.06).setFill(); NSRect(x: 0, y: 0, width: w, height: 0.5).fill()
             }
             let ridShown = info.rid.count > 13 ? String(info.rid.prefix(8)) + "…" : info.rid
-            let title = "Invocación \(ridShown)"
+            let title = L("Invocación %@", ridShown)
             let tf = NSFont.systemFont(ofSize: 13, weight: .medium)
             if draw { (title as NSString).draw(at: NSPoint(x: 14, y: 8), withAttributes: [.font: tf, .foregroundColor: fg]) }
             var chips: [Chip] = []
             if let r = info.report {
                 if let d = r.durationMs { chips.append(Chip(text: d >= 1000 ? String(format: "%.2f s", d / 1000) : String(format: "%.0f ms", d), fg: col(7), bg: chipBg)) }
                 if let used = r.maxMemoryMB, let size = r.memorySizeMB { chips.append(Chip(text: "\(used) / \(size) MB", fg: col(7), bg: chipBg)) }
-            } else if !info.ended { chips.append(Chip(text: "en curso", fg: col(7), bg: chipBg)) }
-            chips.append(Chip(text: "\(info.count) evento\(info.count == 1 ? "" : "s")", fg: col(7), bg: chipBg))
+            } else if !info.ended { chips.append(Chip(text: L("en curso"), fg: col(7), bg: chipBg)) }
+            chips.append(Chip(text: info.count == 1 ? L("%d evento", info.count) : L("%d eventos", info.count), fg: col(7), bg: chipBg))
             if let st = info.report?.status, st.lowercased() != "success" { chips.append(Chip(text: st, fg: col(9), bg: col(9).withAlphaComponent(0.2))) }
-            else if info.hasError { chips.append(Chip(text: "con error", fg: col(9), bg: col(9).withAlphaComponent(0.2))) }
+            else if info.hasError { chips.append(Chip(text: L("con error"), fg: col(9), bg: col(9).withAlphaComponent(0.2))) }
             _ = drawChips(chips, x: 14 + width(title, tf) + 12, y: 8, font: chipFont, draw: draw)
             if draw { ((collapsed ? "›" : "⌄") as NSString).draw(at: NSPoint(x: w - 22, y: 8), withAttributes: [.font: sans, .foregroundColor: dim]) }
             return (groupHeight, .zero)
@@ -138,7 +138,7 @@ enum LogRowRenderer {
             } else if p.json != nil { summary = p.lines[0] }
             else {
                 summary = p.summary
-                if p.lines.count > 1 { chips = [Chip(text: p.isTraceback ? "traceback · \(p.lines.count - 1) líneas" : "\(p.lines.count - 1) líneas más", fg: p.isTraceback ? col(9) : col(7), bg: p.isTraceback ? col(9).withAlphaComponent(0.2) : chipBg)] }
+                if p.lines.count > 1 { chips = [Chip(text: p.isTraceback ? L("traceback · %d líneas", p.lines.count - 1) : L("%d líneas más", p.lines.count - 1), fg: p.isTraceback ? col(9) : col(7), bg: p.isTraceback ? col(9).withAlphaComponent(0.2) : chipBg)] }
             }
             let textColor: NSColor = p.level == .error ? col(9).blended(withFraction: 0.35, of: fg) ?? col(9)
                 : p.level == .warn ? col(11) : (p.level == .debug || p.level == .platform ? dim : fg)
@@ -193,7 +193,7 @@ enum LogRowRenderer {
                 let meta = "\(c.fullTime)  ·  stream \(p.event.stream)  ·  "
                 let mf = NSFont.systemFont(ofSize: 12)
                 let metaW = width(meta, mf)
-                let linkText = p.json != nil && c.opts.json ? "Copiar JSON" : "Copiar mensaje"
+                let linkText = p.json != nil && c.opts.json ? L("Copiar JSON") : L("Copiar mensaje")
                 copyRect = NSRect(x: msgX + metaW, y: metaY, width: width(linkText, mf), height: 18)
                 if draw {
                     (meta as NSString).draw(at: NSPoint(x: msgX, y: metaY), withAttributes: [.font: mf, .foregroundColor: dim])
@@ -340,7 +340,7 @@ final class FormattedLogsView: NSView, NSTableViewDataSource, NSTableViewDelegat
             b.heightAnchor.constraint(equalToConstant: 26).isActive = true
             chipsBar.addArrangedSubview(b)
         }
-        chip("Todos \(parsed.count)", filter == nil, nil)
+        chip(L("Todos %d", parsed.count), filter == nil, nil)
         for l in LogLevel.allCases {
             let n = parsed.filter { $0.level == l }.count
             if n > 0 || filter == l { chip("\(l.filterTitle) \(n)", filter == l, l) }
@@ -413,18 +413,18 @@ final class FormattedLogsView: NSView, NSTableViewDataSource, NSTableViewDelegat
     private func copyRow(_ row: Int) {
         guard rows.indices.contains(row), case .event(let i) = rows[row] else { return }
         let p = parsed[i]
-        if opts.json, let j = jsonText(p) { onCopyText?(j, "JSON copiado") } else { onCopyText?(p.event.message.trimmingCharacters(in: .newlines), "Mensaje copiado") }
+        if opts.json, let j = jsonText(p) { onCopyText?(j, L("JSON copiado")) } else { onCopyText?(p.event.message.trimmingCharacters(in: .newlines), L("Mensaje copiado")) }
     }
     private func menu(forRow row: Int) -> NSMenu? {
         guard rows.indices.contains(row), case .event(let i) = rows[row] else { return nil }
         let p = parsed[i], m = NSMenu()
-        let items: [(String, String, String)] = [("Copiar mensaje", p.event.message.trimmingCharacters(in: .newlines), "Mensaje copiado"),
-            ("Copiar evento completo", "\(timeText(p))  \(p.event.stream)  \(p.event.message.trimmingCharacters(in: .newlines))", "Evento copiado")]
+        let items: [(String, String, String)] = [(L("Copiar mensaje"), p.event.message.trimmingCharacters(in: .newlines), L("Mensaje copiado")),
+            (L("Copiar evento completo"), "\(timeText(p))  \(p.event.stream)  \(p.event.message.trimmingCharacters(in: .newlines))", L("Evento copiado"))]
         for (title, text, desc) in items {
             let it = NSMenuItem(title: title, action: #selector(menuCopy(_:)), keyEquivalent: ""); it.target = self; it.representedObject = [text, desc]; m.addItem(it)
         }
         if let j = jsonText(p) {
-            let it = NSMenuItem(title: "Copiar JSON con formato", action: #selector(menuCopy(_:)), keyEquivalent: ""); it.target = self; it.representedObject = [j, "JSON copiado"]; m.addItem(it)
+            let it = NSMenuItem(title: L("Copiar JSON con formato"), action: #selector(menuCopy(_:)), keyEquivalent: ""); it.target = self; it.representedObject = [j, L("JSON copiado")]; m.addItem(it)
         }
         return m
     }

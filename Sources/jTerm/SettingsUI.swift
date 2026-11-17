@@ -270,8 +270,8 @@ final class SettingsWindow: NSObject {
 
     private let pages: [(title: String, symbol: String)] = [
         ("General", "gearshape"), ("Terminal", "terminal"), ("SSH", "network"),
-        ("Archivos", "arrow.left.arrow.right.square"), ("AWS", "cloud"), ("iCloud", "icloud"),
-        ("Atajos", "keyboard"), ("Datos", "externaldrive"),
+        (L("Archivos"), "arrow.left.arrow.right.square"), ("AWS", "cloud"), ("iCloud", "icloud"),
+        (L("Atajos"), "keyboard"), (L("Datos"), "externaldrive"),
     ]
 
     func show(page: Int? = nil) {
@@ -288,8 +288,8 @@ final class SettingsWindow: NSObject {
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 840, height: 640),
                          styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                          backing: .buffered, defer: false)
-        w.title = "Ajustes"
-        w.titleVisibility = .hidden   // si no, "Ajustes" se solapa con el título de cada página
+        w.title = L("Ajustes")
+        w.titleVisibility = .hidden   // si no, L("Ajustes") se solapa con el título de cada página
         w.appearance = NSAppearance(named: .darkAqua)
         w.titlebarAppearsTransparent = true
         w.backgroundColor = Theme.bg
@@ -483,7 +483,7 @@ final class SettingsWindow: NSObject {
     private func pathPicker(_ value: String, placeholder: String, _ set: @escaping (String) -> Void) -> NSView {
         let f = CompactField(value: value, placeholder: placeholder, width: 190, mono: true)
         f.onCommit = set
-        let pick = action("Elegir…") { [weak f, weak self] in
+        let pick = action(L("Elegir…")) { [weak f, weak self] in
             let p = NSOpenPanel(); p.canChooseDirectories = true; p.canChooseFiles = false; p.canCreateDirectories = true
             if p.runModal() == .OK, let u = p.url { f?.setValue(u.path); set(u.path); _ = self }
         }
@@ -497,23 +497,38 @@ final class SettingsWindow: NSObject {
         let shells = Settings.installedShells()
         let shellIdx = shells.firstIndex(of: s.shell).map { $0 + 1 } ?? 0
         return [
-            section("Terminal local", [
-                row("Shell", "Programa que se ejecuta en las pestañas locales nuevas.",
-                    choice(["Predeterminado del sistema"] + shells, shellIdx, width: 230) { [s] i in s.shell = i == 0 ? "" : shells[i - 1] }),
-                row("Shell de inicio de sesión", "Ejecuta el shell con -l para cargar tu perfil (.zprofile, PATH, etc.).",
+            section(L("Terminal local"), [
+                row("Shell", L("Programa que se ejecuta en las pestañas locales nuevas."),
+                    choice([L("Predeterminado del sistema")] + shells, shellIdx, width: 230) { [s] i in s.shell = i == 0 ? "" : shells[i - 1] }),
+                row(L("Shell de inicio de sesión"), L("Ejecuta el shell con -l para cargar tu perfil (.zprofile, PATH, etc.)."),
                     toggle(s.loginShell) { [s] in s.loginShell = $0 }),
-                row("Carpeta inicial", "Directorio donde abren las pestañas locales nuevas. Vacío = carpeta personal.",
-                    pathPicker(s.startDirectory, placeholder: "Carpeta personal") { [s] in s.startDirectory = $0 }),
-            ], footer: "Los cambios se aplican a las pestañas nuevas."),
-            section("Ventana", [
-                row("Mostrar la barra lateral al iniciar", nil, toggle(s.sidebarAtLaunch) { [s] in s.sidebarAtLaunch = $0 }),
-                row("Mostrar el botón de comandos guardados", "Botón flotante en la esquina inferior izquierda del terminal. Si lo ocultas, sigues pudiendo abrir la lista con ⇧⌘K.",
+                row(L("Carpeta inicial"), L("Directorio donde abren las pestañas locales nuevas. Vacío = carpeta personal."),
+                    pathPicker(s.startDirectory, placeholder: L("Carpeta personal")) { [s] in s.startDirectory = $0 }),
+            ], footer: L("Los cambios se aplican a las pestañas nuevas.")),
+            section(L("Ventana"), [
+                row(L("Mostrar la barra lateral al iniciar"), nil, toggle(s.sidebarAtLaunch) { [s] in s.sidebarAtLaunch = $0 }),
+                row(L("Mostrar el botón de comandos guardados"), L("Botón flotante en la esquina inferior izquierda del terminal. Si lo ocultas, sigues pudiendo abrir la lista con ⇧⌘K."),
                     toggle(s.showSnippetsButton) { [s] in s.showSnippetsButton = $0 }),
             ]),
-            section("Confirmaciones", [
-                row("Al cerrar una pestaña con conexión activa", "Pide confirmación antes de cerrar una sesión SSH o de archivos abierta.",
+            section(L("Idioma"), [
+                row(L("Idioma de la interfaz"), L("Cambia el idioma de los menús, ajustes y diálogos. Se aplica al reiniciar jTerm."),
+                    choice(Lang.allCases.map(\.label), Lang.allCases.firstIndex(of: Lang.preference) ?? 0, width: 230) { [weak self] i in
+                        let new = Lang.allCases[i]
+                        guard new != Lang.preference else { return }
+                        Lang.preference = new
+                        // ¿cambia el idioma efectivo? (p. ej. Automático → Español con el sistema en español no cambia nada)
+                        let a = NSAlert(); a.messageText = L("Idioma cambiado")
+                        a.informativeText = L("Reinicia jTerm para aplicar el nuevo idioma.")
+                        a.addButton(withTitle: L("Reiniciar ahora")); a.addButton(withTitle: L("Más tarde"))
+                        if let w = self?.window {
+                            a.beginSheetModal(for: w) { if $0 == .alertFirstButtonReturn { relaunchApp() } }
+                        } else if a.runModal() == .alertFirstButtonReturn { relaunchApp() }
+                    }),
+            ]),
+            section(L("Confirmaciones"), [
+                row(L("Al cerrar una pestaña con conexión activa"), L("Pide confirmación antes de cerrar una sesión SSH o de archivos abierta."),
                     toggle(s.confirmClose) { [s] in s.confirmClose = $0 }),
-                row("Al salir con conexiones activas", "Pide confirmación antes de cerrar jTerm si hay conexiones abiertas.",
+                row(L("Al salir con conexiones activas"), L("Pide confirmación antes de cerrar jTerm si hay conexiones abiertas."),
                     toggle(s.confirmQuit) { [s] in s.confirmQuit = $0 }),
             ]),
         ]
@@ -530,45 +545,45 @@ final class SettingsWindow: NSObject {
         let preview = ThemePreview()
         preview.translatesAutoresizingMaskIntoConstraints = false
         return [
-            section("Apariencia", [
-                row("Tema de colores", nil, choice(themes, themes.firstIndex(of: s.themeName) ?? 0, width: 190) { [s] in s.themeName = themes[$0] }),
-                row("Color de acento", "Botones, selección y resaltados de la app. Algunos detalles cambian al reabrir jTerm.",
-                    choice(Settings.accents.map(\.name), Settings.accents.firstIndex { $0.name == s.accentName } ?? 0, width: 150) { [s] in s.accentName = Settings.accents[$0].name }),
-                row("Fuente", "Solo se muestran fuentes monoespaciadas.",
-                    choice(["Sistema (SF Mono)"] + fams, famIdx, width: 230) { [s] i in s.fontFamily = i == 0 ? "system" : fams[i - 1] }),
-                row("Tamaño de fuente", nil, stepper(s.fontSize, 9, 32, format: { "\($0) pt" }) { [s] in s.fontSize = $0 }),
+            section(L("Apariencia"), [
+                row(L("Tema de colores"), nil, choice(themes, themes.firstIndex(of: s.themeName) ?? 0, width: 190) { [s] in s.themeName = themes[$0] }),
+                row(L("Color de acento"), L("Botones, selección y resaltados de la app. Algunos detalles cambian al reabrir jTerm."),
+                    choice(Settings.accents.map { L($0.name) }, Settings.accents.firstIndex { $0.name == s.accentName } ?? 0, width: 150) { [s] in s.accentName = Settings.accents[$0].name }),
+                row(L("Fuente"), L("Solo se muestran fuentes monoespaciadas."),
+                    choice([L("Sistema (SF Mono)")] + fams, famIdx, width: 230) { [s] i in s.fontFamily = i == 0 ? "system" : fams[i - 1] }),
+                row(L("Tamaño de fuente"), nil, stepper(s.fontSize, 9, 32, format: { "\($0) pt" }) { [s] in s.fontSize = $0 }),
                 preview,
             ]),
             section("Cursor", [
-                row("Forma", nil, choice(["Bloque", "Subrayado", "Barra"], shapes.firstIndex(of: s.cursorShape) ?? 0, width: 150) { [s] in s.cursorShape = shapes[$0] }),
-                row("Parpadeo", nil, toggle(s.cursorBlink) { [s] in s.cursorBlink = $0 }),
+                row(L("Forma"), nil, choice([L("Bloque"), L("Subrayado"), L("Barra")], shapes.firstIndex(of: s.cursorShape) ?? 0, width: 150) { [s] in s.cursorShape = shapes[$0] }),
+                row(L("Parpadeo"), nil, toggle(s.cursorBlink) { [s] in s.cursorBlink = $0 }),
             ]),
-            section("Comportamiento", [
-                row("Líneas de historial", "Más líneas permiten desplazarte más atrás, pero usan más memoria por pestaña.",
+            section(L("Comportamiento"), [
+                row(L("Líneas de historial"), L("Más líneas permiten desplazarte más atrás, pero usan más memoria por pestaña."),
                     choice(["1.000", "5.000", "10.000", "50.000", "100.000"], scrollIdx, width: 130) { [s] in s.scrollback = scrolls[$0] }),
-                row("Usar Option como Meta", "Permite atajos como Option+← para saltar palabras en el shell.",
+                row(L("Usar Option como Meta"), L("Permite atajos como Option+← para saltar palabras en el shell."),
                     toggle(s.optionAsMeta) { [s] in s.optionAsMeta = $0 }),
-                row("Subrayar las URLs de la salida", "Las URLs se ven subrayadas; ⌘+clic las abre. Con ⌘ pulsado también se subrayan las rutas de archivo.",
+                row(L("Subrayar las URLs de la salida"), L("Las URLs se ven subrayadas; ⌘+clic las abre. Con ⌘ pulsado también se subrayan las rutas de archivo."),
                     toggle(s.underlineLinks) { [s] in s.underlineLinks = $0 }),
-                row("Permitir que las aplicaciones capturen el mouse", "Necesario para tmux, vim o htop con ratón. Si lo desactivas, el mouse solo selecciona texto.",
+                row(L("Permitir que las aplicaciones capturen el mouse"), L("Necesario para tmux, vim o htop con ratón. Si lo desactivas, el mouse solo selecciona texto."),
                     toggle(s.mouseReporting) { [s] in s.mouseReporting = $0 }),
             ]),
-            section("Seguridad", [
-                row("Confirmar antes de pegar varias líneas", "Muestra las líneas y pregunta antes de enviarlas al terminal. No se pregunta dentro de vim, nano o less.",
+            section(L("Seguridad"), [
+                row(L("Confirmar antes de pegar varias líneas"), L("Muestra las líneas y pregunta antes de enviarlas al terminal. No se pregunta dentro de vim, nano o less."),
                     toggle(s.confirmMultilinePaste) { [s] in s.confirmMultilinePaste = $0 }),
-                row("Avisar de comandos delicados en producción", "En pestañas con entorno Producción pregunta antes de ejecutar rm, DROP, TRUNCATE, DELETE sin WHERE, docker rm, kubectl delete, reinicios y similares.",
+                row(L("Avisar de comandos delicados en producción"), L("En pestañas con entorno Producción pregunta antes de ejecutar rm, DROP, TRUNCATE, DELETE sin WHERE, docker rm, kubectl delete, reinicios y similares."),
                     toggle(s.warnDangerousProd) { [s] in s.warnDangerousProd = $0 }),
-            ], footer: "El entorno de cada servidor o cuenta AWS se elige al editarlo."),
-            section("Grabaciones", [
-                row("Grabar automáticamente las pestañas de producción", "Cada pestaña con entorno Producción empieza a grabarse sola. También puedes grabar cualquier pestaña con ⌥⌘R.",
+            ], footer: L("El entorno de cada servidor o cuenta AWS se elige al editarlo.")),
+            section(L("Grabaciones"), [
+                row(L("Grabar automáticamente las pestañas de producción"), L("Cada pestaña con entorno Producción empieza a grabarse sola. También puedes grabar cualquier pestaña con ⌥⌘R."),
                     toggle(s.autoRecordProd) { [s] in s.autoRecordProd = $0 }),
-                row("Carpeta de grabaciones", "Se guarda el texto de lo que muestra el terminal, un archivo por sesión. Vacío = la carpeta de datos de jTerm.",
-                    pathPicker(s.recordingDirectory, placeholder: "Predeterminada") { [s] in s.recordingDirectory = $0 }),
-            ], footer: "Las grabaciones pueden contener información sensible; solo tu usuario puede leerlas."),
-            section("Compatibilidad", [
-                row("Tipo de terminal (TERM)", "Algunos servidores antiguos no conocen xterm-256color. Se aplica a las pestañas nuevas.",
+                row(L("Carpeta de grabaciones"), L("Se guarda el texto de lo que muestra el terminal, un archivo por sesión. Vacío = la carpeta de datos de jTerm."),
+                    pathPicker(s.recordingDirectory, placeholder: L("Predeterminada")) { [s] in s.recordingDirectory = $0 }),
+            ], footer: L("Las grabaciones pueden contener información sensible; solo tu usuario puede leerlas.")),
+            section(L("Compatibilidad"), [
+                row(L("Tipo de terminal (TERM)"), L("Algunos servidores antiguos no conocen xterm-256color. Se aplica a las pestañas nuevas."),
                     choice(terms, terms.firstIndex(of: s.termName) ?? 0, width: 190) { [s] in s.termName = terms[$0] }),
-                row("La tecla Borrar envía Ctrl-H", "Actívalo si en algún servidor la tecla Borrar no funciona bien.",
+                row(L("La tecla Borrar envía Ctrl-H"), L("Actívalo si en algún servidor la tecla Borrar no funciona bien."),
                     toggle(s.backspaceCtrlH) { [s] in s.backspaceCtrlH = $0 }),
             ]),
         ]
@@ -581,22 +596,22 @@ final class SettingsWindow: NSObject {
         let user = CompactField(value: s.defaultUser, placeholder: "root", width: 150)
         user.onCommit = { [s] in s.defaultUser = $0 }
         return [
-            section("Conexión", [
-                row("Mantener la conexión activa", "Envía un latido cada cierto tiempo para que el servidor o el router no cierren sesiones inactivas.",
-                    stepper(s.sshKeepAlive, 0, 600, step: 5, format: { $0 == 0 ? "Desactivado" : "\($0) s" }) { [s] in s.sshKeepAlive = $0 }),
-                row("Hosts desconocidos", "Qué hacer la primera vez que te conectas a un servidor. Si su clave cambia después, la conexión siempre se rechaza.",
-                    choice(["Aceptar y recordar (recomendado)", "Estricto: solo hosts ya conocidos"], policies.firstIndex(of: s.sshHostKey) ?? 0, width: 250) { [s] in s.sshHostKey = policies[$0] }),
-                row("Comprimir el tráfico", "Útil en conexiones lentas; en redes rápidas puede ser más lento.",
+            section(L("Conexión"), [
+                row(L("Mantener la conexión activa"), L("Envía un latido cada cierto tiempo para que el servidor o el router no cierren sesiones inactivas."),
+                    stepper(s.sshKeepAlive, 0, 600, step: 5, format: { $0 == 0 ? L("Desactivado") : "\($0) s" }) { [s] in s.sshKeepAlive = $0 }),
+                row(L("Hosts desconocidos"), L("Qué hacer la primera vez que te conectas a un servidor. Si su clave cambia después, la conexión siempre se rechaza."),
+                    choice([L("Aceptar y recordar (recomendado)"), L("Estricto: solo hosts ya conocidos")], policies.firstIndex(of: s.sshHostKey) ?? 0, width: 250) { [s] in s.sshHostKey = policies[$0] }),
+                row(L("Comprimir el tráfico"), L("Útil en conexiones lentas; en redes rápidas puede ser más lento."),
                     toggle(s.sshCompression) { [s] in s.sshCompression = $0 }),
-                row("Reenviar el agente SSH", "Permite que el servidor use tus llaves locales para saltar a otros equipos. Actívalo solo en servidores de confianza.",
+                row(L("Reenviar el agente SSH"), L("Permite que el servidor use tus llaves locales para saltar a otros equipos. Actívalo solo en servidores de confianza."),
                     toggle(s.sshForwardAgent) { [s] in s.sshForwardAgent = $0 }),
-            ], footer: "Se aplica a las conexiones nuevas (terminal y transferencia de archivos)."),
-            section("Servidores nuevos", [
-                row("Usuario por defecto", "Se rellena al agregar un servidor.", user),
-                row("Puerto por defecto", nil, stepper(s.defaultPort, 1, 65535) { [s] in s.defaultPort = $0 }),
+            ], footer: L("Se aplica a las conexiones nuevas (terminal y transferencia de archivos).")),
+            section(L("Servidores nuevos"), [
+                row(L("Usuario por defecto"), L("Se rellena al agregar un servidor."), user),
+                row(L("Puerto por defecto"), nil, stepper(s.defaultPort, 1, 65535) { [s] in s.defaultPort = $0 }),
             ]),
-            section("Avanzado", [
-                rowStacked("Opciones adicionales de ssh", "Una por línea, con formato Clave=Valor (por ejemplo ServerAliveCountMax=3). Se pasan a ssh con -o. Las líneas que empiezan con # se ignoran.", extra),
+            section(L("Avanzado"), [
+                rowStacked(L("Opciones adicionales de ssh"), L("Una por línea, con formato Clave=Valor (por ejemplo ServerAliveCountMax=3). Se pasan a ssh con -o. Las líneas que empiezan con # se ignoran."), extra),
             ]),
         ]
     }
@@ -604,17 +619,17 @@ final class SettingsWindow: NSObject {
     private func filesPage() -> [NSView] {
         let delays = [0, 2, 4, 10, 30]
         return [
-            section("Paneles", [
-                row("Mostrar archivos ocultos en este Mac", nil, toggle(s.filesLocalHidden) { [s] in s.filesLocalHidden = $0 }),
-                row("Mostrar archivos ocultos en el servidor", nil, toggle(s.filesRemoteHidden) { [s] in s.filesRemoteHidden = $0 }),
-                row("Carpeta inicial de este Mac", "Vacío = carpeta personal.",
-                    pathPicker(s.filesLocalStart, placeholder: "Carpeta personal") { [s] in s.filesLocalStart = $0 }),
-            ], footer: "Se aplica a las pestañas de archivos nuevas."),
-            section("Operaciones", [
-                row("Confirmar antes de eliminar", "En el servidor, eliminar no se puede deshacer; en tu Mac los archivos van a la papelera.",
+            section(L("Paneles"), [
+                row(L("Mostrar archivos ocultos en este Mac"), nil, toggle(s.filesLocalHidden) { [s] in s.filesLocalHidden = $0 }),
+                row(L("Mostrar archivos ocultos en el servidor"), nil, toggle(s.filesRemoteHidden) { [s] in s.filesRemoteHidden = $0 }),
+                row(L("Carpeta inicial de este Mac"), L("Vacío = carpeta personal."),
+                    pathPicker(s.filesLocalStart, placeholder: L("Carpeta personal")) { [s] in s.filesLocalStart = $0 }),
+            ], footer: L("Se aplica a las pestañas de archivos nuevas.")),
+            section(L("Operaciones"), [
+                row(L("Confirmar antes de eliminar"), L("En el servidor, eliminar no se puede deshacer; en tu Mac los archivos van a la papelera."),
                     toggle(s.filesConfirmDelete) { [s] in s.filesConfirmDelete = $0 }),
-                row("Ocultar transferencias completadas", nil,
-                    choice(["No ocultar", "A los 2 s", "A los 4 s", "A los 10 s", "A los 30 s"], delays.firstIndex(of: s.transferDismiss) ?? 2, width: 150) { [s] in s.transferDismiss = delays[$0] }),
+                row(L("Ocultar transferencias completadas"), nil,
+                    choice([L("No ocultar"), L("A los 2 s"), L("A los 4 s"), L("A los 10 s"), L("A los 30 s")], delays.firstIndex(of: s.transferDismiss) ?? 2, width: 150) { [s] in s.transferDismiss = delays[$0] }),
             ]),
         ]
     }
@@ -645,33 +660,33 @@ final class SettingsWindow: NSObject {
             }
         }
         let known = (UserDefaults.standard.dictionaryRepresentation().keys.filter { $0.hasPrefix("aws.user.") }).count
-        let all = action("Todas") { [weak self] in self?.s.awsRegions = regions; self?.select(4) }
-        let none = action("Ninguna") { [weak self] in self?.s.awsRegions = []; self?.select(4) }
+        let all = action(L("Todas")) { [weak self] in self?.s.awsRegions = regions; self?.select(4) }
+        let none = action(L("Ninguna")) { [weak self] in self?.s.awsRegions = []; self?.select(4) }
         let gridBox = NSStackView(views: [grid, NSStackView(views: [all, none])])
         gridBox.orientation = .vertical; gridBox.alignment = .leading; gridBox.spacing = 12
         gridBox.edgeInsets = NSEdgeInsets(top: 16, left: 20, bottom: 16, right: 20)
         (gridBox.arrangedSubviews[1] as? NSStackView)?.spacing = 8
 
         return [
-            section("Cuentas nuevas", [
-                row("Región por defecto", "Se usa al agregar una cuenta.",
+            section(L("Cuentas nuevas"), [
+                row(L("Región por defecto"), L("Se usa al agregar una cuenta."),
                     choice(regions, regions.firstIndex(of: s.awsRegion) ?? 0, width: 170) { [s] in s.awsRegion = regions[$0] }),
-                row("Usuario SSH por defecto", "Sugerido al conectarte a una instancia: ec2-user (Amazon Linux), ubuntu, admin…", user),
+                row(L("Usuario SSH por defecto"), L("Sugerido al conectarte a una instancia: ec2-user (Amazon Linux), ubuntu, admin…"), user),
             ]),
-            section("Regiones consultadas", [gridBox],
-                    footer: "Solo afecta a la opción “Todas las regiones”. Menos regiones hacen el listado más rápido."),
-            section("Mantenimiento", [
-                row("Usuarios recordados", known == 0 ? "No hay usuarios recordados." : "jTerm recuerda el usuario de \(known) instancia\(known == 1 ? "" : "s"). Olvídalos para que vuelva a preguntar.",
-                    action("Olvidar") { [weak self] in
+            section(L("Regiones consultadas"), [gridBox],
+                    footer: L("Solo afecta a la opción “Todas las regiones”. Menos regiones hacen el listado más rápido.")),
+            section(L("Mantenimiento"), [
+                row(L("Usuarios recordados"), known == 0 ? L("No hay usuarios recordados.") : L(known == 1 ? "jTerm recuerda el usuario de 1 instancia. Olvídalos para que vuelva a preguntar." : "jTerm recuerda el usuario de %d instancias. Olvídalos para que vuelva a preguntar.", known),
+                    action(L("Olvidar")) { [weak self] in
                         for k in UserDefaults.standard.dictionaryRepresentation().keys where k.hasPrefix("aws.user.") { UserDefaults.standard.removeObject(forKey: k) }
                         UserDefaults.standard.removeObject(forKey: "aws.lastUser")
                         self?.select(4)
                     }),
-                row("Llave de Instance Connect", "Llave SSH propia de jTerm que se envía a AWS al conectar. Regenerarla crea una nueva en la próxima conexión.",
-                    action("Regenerar") { [weak self] in
+                row(L("Llave de Instance Connect"), L("Llave SSH propia de jTerm que se envía a AWS al conectar. Regenerarla crea una nueva en la próxima conexión."),
+                    action(L("Regenerar")) { [weak self] in
                         let path = ServerStore.dir.appendingPathComponent("eic_ed25519").path
                         try? FileManager.default.removeItem(atPath: path); try? FileManager.default.removeItem(atPath: path + ".pub")
-                        showAlert("Llave eliminada", "Se generará una nueva la próxima vez que te conectes a una instancia.", window: self?.window)
+                        showAlert(L("Llave eliminada"), L("Se generará una nueva la próxima vez que te conectes a una instancia."), window: self?.window)
                     }),
             ]),
         ]
@@ -683,66 +698,66 @@ final class SettingsWindow: NSObject {
         let m = SyncManager.shared
         var blocks: [NSView] = []
         if SyncManager.iCloudFolder() == nil {
-            blocks.append(note("iCloud Drive no está activo en este Mac. Actívalo en Ajustes del Sistema ▸ tu nombre ▸ iCloud ▸ Unidad de iCloud para poder sincronizar."))
+            blocks.append(note(L("iCloud Drive no está activo en este Mac. Actívalo en Ajustes del Sistema ▸ tu nombre ▸ iCloud ▸ Unidad de iCloud para poder sincronizar.")))
         }
-        var status = "Todavía no se ha sincronizado."
-        if m.isSyncing { status = "Sincronizando…" }
-        else if let e = m.lastError { status = "Error: " + e }
+        var status = L("Todavía no se ha sincronizado.")
+        if m.isSyncing { status = L("Sincronizando…") }
+        else if let e = m.lastError { status = L("Error: ") + e }
         else if let l = m.lastSync {
-            let f = RelativeDateTimeFormatter(); f.locale = Locale(identifier: "es"); f.unitsStyle = .full
-            status = "Última sincronización: " + (Date().timeIntervalSince(l) < 10 ? "justo ahora" : f.localizedString(for: l, relativeTo: Date()))
+            let f = RelativeDateTimeFormatter(); f.locale = Lang.active.locale; f.unitsStyle = .full
+            status = L("Última sincronización: ") + (Date().timeIntervalSince(l) < 10 ? L("justo ahora") : f.localizedString(for: l, relativeTo: Date()))
         }
-        let syncNowBtn = action(m.isSyncing ? "Sincronizando…" : "Sincronizar ahora") { SyncManager.shared.syncNow() }
+        let syncNowBtn = action(m.isSyncing ? L("Sincronizando…") : L("Sincronizar ahora")) { SyncManager.shared.syncNow() }
         syncNowBtn.isEnabled = !m.isSyncing
 
         var main: [NSView] = [
-            row("Sincronizar con iCloud", "Mantiene tus conexiones, comandos y ajustes iguales en todos tus Mac. Los datos se guardan cifrados en la carpeta “jTerm” de tu iCloud Drive.",
+            row(L("Sincronizar con iCloud"), L("Mantiene tus conexiones, comandos y ajustes iguales en todos tus Mac. Los datos se guardan cifrados en la carpeta “jTerm” de tu iCloud Drive."),
                 toggle(m.enabled) { [weak self] on in on ? self?.enableSync() : self?.confirmDisableSync() }),
         ]
         if m.enabled {
-            main.append(row("Estado", status, syncNowBtn))
+            main.append(row(L("Estado"), status, syncNowBtn))
             if m.needsPassphrase {
                 let missing = m.passphrase == nil
-                main.append(row(missing ? "Falta la contraseña de sincronización" : "La contraseña de sincronización no coincide",
-                                missing ? "Ingrésala para seguir sincronizando." : "Cambió en otro Mac o se ingresó mal. Ingrésala de nuevo para seguir sincronizando.",
-                                action("Ingresar contraseña…", primary: true) { [weak self] in self?.reenterSyncPassphrase() }))
+                main.append(row(missing ? L("Falta la contraseña de sincronización") : L("La contraseña de sincronización no coincide"),
+                                missing ? L("Ingrésala para seguir sincronizando.") : L("Cambió en otro Mac o se ingresó mal. Ingrésala de nuevo para seguir sincronizando."),
+                                action(L("Ingresar contraseña…"), primary: true) { [weak self] in self?.reenterSyncPassphrase() }))
             }
         }
-        blocks.append(section("Sincronización", main))
+        blocks.append(section(L("Sincronización"), main))
         guard m.enabled else {
-            blocks.append(section(nil, [row("Cómo funciona", "El cambio más reciente de cada elemento gana, y los borrados también se propagan. Tus datos viajan cifrados con una contraseña que solo tú conoces: ni Apple ni nadie con acceso a tu iCloud puede leerlos.", NSView())]))
+            blocks.append(section(nil, [row(L("Cómo funciona"), L("El cambio más reciente de cada elemento gana, y los borrados también se propagan. Tus datos viajan cifrados con una contraseña que solo tú conoces: ni Apple ni nadie con acceso a tu iCloud puede leerlos."), NSView())]))
             return blocks
         }
-        blocks.append(section("Qué sincronizar", [
-            row("Conexiones (servidores)", nil, toggle(m.syncServers) { m.syncServers = $0; m.scheduleSync(after: 1) }),
-            row("Cuentas de AWS", nil, toggle(m.syncAWS) { m.syncAWS = $0; m.scheduleSync(after: 1) }),
-            row("Comandos guardados", nil, toggle(m.syncCommands) { m.syncCommands = $0; m.scheduleSync(after: 1) }),
-            row("Ajustes", "Tema, fuente, SSH y demás. No incluye lo propio de cada Mac, como el shell o las carpetas iniciales.", toggle(m.syncSettings) { m.syncSettings = $0; m.scheduleSync(after: 1) }),
-            row("Incluir contraseñas y claves secretas", "Contraseñas de servidores, passphrases y claves secretas de AWS. Viajan cifradas con tu contraseña de sincronización. Actívalo en cada Mac donde quieras recibirlas.",
+        blocks.append(section(L("Qué sincronizar"), [
+            row(L("Conexiones (servidores)"), nil, toggle(m.syncServers) { m.syncServers = $0; m.scheduleSync(after: 1) }),
+            row(L("Cuentas de AWS"), nil, toggle(m.syncAWS) { m.syncAWS = $0; m.scheduleSync(after: 1) }),
+            row(L("Comandos guardados"), nil, toggle(m.syncCommands) { m.syncCommands = $0; m.scheduleSync(after: 1) }),
+            row(L("Ajustes"), L("Tema, fuente, SSH y demás. No incluye lo propio de cada Mac, como el shell o las carpetas iniciales."), toggle(m.syncSettings) { m.syncSettings = $0; m.scheduleSync(after: 1) }),
+            row(L("Incluir contraseñas y claves secretas"), L("Contraseñas de servidores, passphrases y claves secretas de AWS. Viajan cifradas con tu contraseña de sincronización. Actívalo en cada Mac donde quieras recibirlas."),
                 toggle(m.syncSecrets) { [weak self] on in on ? self?.confirmSyncSecrets() : { m.syncSecrets = false; m.scheduleSync(after: 1) }() }),
         ]))
-        blocks.append(section("Seguridad", [
-            row("Contraseña de sincronización", "Cifra tus datos en iCloud. Si la cambias, tendrás que ingresar la nueva en tus otros Mac.",
-                action("Cambiar…") { [weak self] in self?.changeSyncPassphrase() }),
-            row("Borrar los datos de iCloud", "Elimina el archivo de sincronización y desactiva la sincronización aquí. Tus datos en este Mac no se tocan.",
-                action("Borrar…") { [weak self] in self?.confirmDeleteSyncData() }),
+        blocks.append(section(L("Seguridad"), [
+            row(L("Contraseña de sincronización"), L("Cifra tus datos en iCloud. Si la cambias, tendrás que ingresar la nueva en tus otros Mac."),
+                action(L("Cambiar…")) { [weak self] in self?.changeSyncPassphrase() }),
+            row(L("Borrar los datos de iCloud"), L("Elimina el archivo de sincronización y desactiva la sincronización aquí. Tus datos en este Mac no se tocan."),
+                action(L("Borrar…")) { [weak self] in self?.confirmDeleteSyncData() }),
         ]))
         return blocks
     }
 
     private func enableSync() {
         let m = SyncManager.shared
-        guard let storage = m.storage else { showAlert("iCloud Drive no está activo", "Actívalo en Ajustes del Sistema ▸ tu nombre ▸ iCloud ▸ Unidad de iCloud.", window: window); select(5); return }
+        guard let storage = m.storage else { showAlert(L("iCloud Drive no está activo"), L("Actívalo en Ajustes del Sistema ▸ tu nombre ▸ iCloud ▸ Unidad de iCloud."), window: window); select(5); return }
         let pass: String
         if storage.hasData {
-            guard let p = askPassphrase("Contraseña de sincronización",
-                                        "Ya hay datos de jTerm en tu iCloud. Ingresa la contraseña de sincronización con la que se crearon.", confirm: false) else { select(5); return }
+            guard let p = askPassphrase(L("Contraseña de sincronización"),
+                                        L("Ya hay datos de jTerm en tu iCloud. Ingresa la contraseña de sincronización con la que se crearon."), confirm: false) else { select(5); return }
             do { try storage.verify(passphrase: p) }
-            catch { showAlert("No se pudo activar", error.localizedDescription, window: window); select(5); return }
+            catch { showAlert(L("No se pudo activar"), error.localizedDescription, window: window); select(5); return }
             pass = p
         } else {
-            guard let p = askPassphrase("Crea una contraseña de sincronización",
-                                        "Cifra tus datos en iCloud. La necesitarás para activar la sincronización en tus otros Mac y no se puede recuperar.", confirm: true) else { select(5); return }
+            guard let p = askPassphrase(L("Crea una contraseña de sincronización"),
+                                        L("Cifra tus datos en iCloud. La necesitarás para activar la sincronización en tus otros Mac y no se puede recuperar."), confirm: true) else { select(5); return }
             pass = p
         }
         m.passphrase = pass; m.resetState(); m.enabled = true
@@ -750,47 +765,47 @@ final class SettingsWindow: NSObject {
         m.syncNow { [weak self] result in
             switch result {
             case .success(let r):
-                showAlert("Sincronización activada", "Se subieron \(r.uploaded) elementos y se descargaron \(r.downloaded). Se mantendrá actualizada automáticamente.", window: self?.window)
+                showAlert(L("Sincronización activada"), "Se subieron \(r.uploaded) elementos y se descargaron \(r.downloaded). Se mantendrá actualizada automáticamente.", window: self?.window)
             case .failure(let e):
-                showAlert("No se pudo sincronizar", e.localizedDescription, window: self?.window)
+                showAlert(L("No se pudo sincronizar"), e.localizedDescription, window: self?.window)
             }
         }
     }
 
     private func confirmDisableSync() {
-        let a = NSAlert(); a.messageText = "¿Dejar de sincronizar con iCloud?"
-        a.informativeText = "Tus datos en este Mac se conservan y los del iCloud también. Para volver a sincronizar tendrás que ingresar la contraseña de sincronización."
-        a.addButton(withTitle: "Dejar de sincronizar"); a.addButton(withTitle: "Cancelar")
+        let a = NSAlert(); a.messageText = L("¿Dejar de sincronizar con iCloud?")
+        a.informativeText = L("Tus datos en este Mac se conservan y los del iCloud también. Para volver a sincronizar tendrás que ingresar la contraseña de sincronización.")
+        a.addButton(withTitle: L("Dejar de sincronizar")); a.addButton(withTitle: L("Cancelar"))
         if a.runModal() == .alertFirstButtonReturn { SyncManager.shared.disable() }
         select(5)
     }
 
     private func confirmSyncSecrets() {
-        let a = NSAlert(); a.messageText = "¿Sincronizar también contraseñas y claves?"
-        a.informativeText = "Se guardarán en tu iCloud cifradas con tu contraseña de sincronización. Si la olvidas, no hay forma de recuperarlas desde iCloud."
-        a.addButton(withTitle: "Sincronizar"); a.addButton(withTitle: "Cancelar")
+        let a = NSAlert(); a.messageText = L("¿Sincronizar también contraseñas y claves?")
+        a.informativeText = L("Se guardarán en tu iCloud cifradas con tu contraseña de sincronización. Si la olvidas, no hay forma de recuperarlas desde iCloud.")
+        a.addButton(withTitle: L("Sincronizar")); a.addButton(withTitle: L("Cancelar"))
         if a.runModal() == .alertFirstButtonReturn { SyncManager.shared.syncSecrets = true; SyncManager.shared.scheduleSync(after: 1) }
         select(5)
     }
 
     private func changeSyncPassphrase() {
-        guard let p = askPassphrase("Nueva contraseña de sincronización", "Se volverá a cifrar el archivo de iCloud. Tendrás que ingresarla en tus otros Mac.", confirm: true) else { return }
-        do { try SyncManager.shared.changePassphrase(to: p); showAlert("Contraseña cambiada", "Ingresa la nueva en tus otros Mac cuando te la pidan.", window: window) }
-        catch { showAlert("No se pudo cambiar", error.localizedDescription, window: window) }
+        guard let p = askPassphrase(L("Nueva contraseña de sincronización"), L("Se volverá a cifrar el archivo de iCloud. Tendrás que ingresarla en tus otros Mac."), confirm: true) else { return }
+        do { try SyncManager.shared.changePassphrase(to: p); showAlert(L("Contraseña cambiada"), L("Ingresa la nueva en tus otros Mac cuando te la pidan."), window: window) }
+        catch { showAlert(L("No se pudo cambiar"), error.localizedDescription, window: window) }
     }
 
     private func reenterSyncPassphrase() {
         let m = SyncManager.shared
         guard let storage = m.storage,
-              let p = askPassphrase("Contraseña de sincronización", "Ingresa la contraseña con la que se cifraron los datos en iCloud.", confirm: false) else { return }
+              let p = askPassphrase(L("Contraseña de sincronización"), L("Ingresa la contraseña con la que se cifraron los datos en iCloud."), confirm: false) else { return }
         do { try storage.verify(passphrase: p); m.passphrase = p; m.syncNow() }
-        catch { showAlert("No coincide", error.localizedDescription, window: window) }
+        catch { showAlert(L("No coincide"), error.localizedDescription, window: window) }
     }
 
     private func confirmDeleteSyncData() {
-        let a = NSAlert(); a.messageText = "¿Borrar los datos de iCloud?"
-        a.informativeText = "Se elimina el archivo de sincronización de tu iCloud y se desactiva la sincronización en este Mac. Los otros Mac conservan sus datos locales. Tus datos en este Mac no se tocan."
-        a.alertStyle = .warning; a.addButton(withTitle: "Borrar"); a.addButton(withTitle: "Cancelar")
+        let a = NSAlert(); a.messageText = L("¿Borrar los datos de iCloud?")
+        a.informativeText = L("Se elimina el archivo de sincronización de tu iCloud y se desactiva la sincronización en este Mac. Los otros Mac conservan sus datos locales. Tus datos en este Mac no se tocan.")
+        a.alertStyle = .warning; a.addButton(withTitle: L("Borrar")); a.addButton(withTitle: L("Cancelar"))
         if a.runModal() == .alertFirstButtonReturn { SyncManager.shared.storage?.delete(); SyncManager.shared.disable() }
         select(5)
     }
@@ -809,19 +824,19 @@ final class SettingsWindow: NSObject {
             return row(d, nil, box)
         }
         return [
-            section("Pestañas y ventana", [
-                key("⌘T", "Nueva pestaña local"), key("⌘W", "Cerrar pestaña"),
-                key("⇧⌘]", "Pestaña siguiente"), key("⇧⌘[", "Pestaña anterior"),
-                key("⌘1 … ⌘9", "Ir a la pestaña número N"), key("⌘B", "Mostrar u ocultar la barra lateral"),
-                key("⇧⌘K", "Abrir la lista de comandos guardados"), key("⌘,", "Abrir los ajustes"),
+            section(L("Pestañas y ventana"), [
+                key("⌘T", L("Nueva pestaña local")), key("⌘W", L("Cerrar pestaña")),
+                key("⇧⌘]", L("Pestaña siguiente")), key("⇧⌘[", L("Pestaña anterior")),
+                key("⌘1 … ⌘9", L("Ir a la pestaña número N")), key("⌘B", L("Mostrar u ocultar la barra lateral")),
+                key("⇧⌘K", L("Abrir la lista de comandos guardados")), key("⌘,", L("Abrir los ajustes")),
             ]),
             section("Terminal", [
-                key("⌘C / ⌘V", "Copiar / pegar"), key("⌘A", "Seleccionar todo"),
+                key("⌘C / ⌘V", L("Copiar / pegar")), key("⌘A", L("Seleccionar todo")),
             ]),
-            section("Gestor de archivos", [
-                key("Retorno", "Renombrar el elemento seleccionado"), key("Suprimir", "Eliminar la selección"),
-                key("Doble clic", "Abrir carpeta (o abrir el archivo en tu Mac)"),
-            ], footer: "También puedes arrastrar archivos entre los dos paneles, o desde Finder hacia el servidor."),
+            section(L("Gestor de archivos"), [
+                key(L("Retorno"), L("Renombrar el elemento seleccionado")), key(L("Suprimir"), L("Eliminar la selección")),
+                key(L("Doble clic"), L("Abrir carpeta (o abrir el archivo en tu Mac)")),
+            ], footer: L("También puedes arrastrar archivos entre los dos paneles, o desde Finder hacia el servidor.")),
         ]
     }
 
@@ -830,26 +845,26 @@ final class SettingsWindow: NSObject {
         let verLabel = NSTextField(labelWithString: "jTerm \(version)")
         verLabel.font = .systemFont(ofSize: 13); verLabel.textColor = .secondaryLabelColor
         return [
-            section("Servidores y cuentas", [
-                row("Exportar", "Guarda tus servidores y cuentas AWS en un archivo. Opcionalmente incluye las contraseñas y claves secretas, y entonces el archivo se cifra con una contraseña que eliges.",
-                    action("Exportar…") { [weak self] in self?.exportData() }),
-                row("Importar", "Agrega los servidores y cuentas de un archivo exportado. Si está cifrado, te pedirá su contraseña y restaurará también las claves.",
-                    action("Importar…") { [weak self] in self?.importData() }),
+            section(L("Servidores y cuentas"), [
+                row(L("Exportar"), L("Guarda tus servidores y cuentas AWS en un archivo. Opcionalmente incluye las contraseñas y claves secretas, y entonces el archivo se cifra con una contraseña que eliges."),
+                    action(L("Exportar…")) { [weak self] in self?.exportData() }),
+                row(L("Importar"), L("Agrega los servidores y cuentas de un archivo exportado. Si está cifrado, te pedirá su contraseña y restaurará también las claves."),
+                    action(L("Importar…")) { [weak self] in self?.importData() }),
             ]),
-            section("Almacenamiento", [
-                row("Carpeta de datos", "Aquí se guardan tus servidores, cuentas y la llave de Instance Connect. Las contraseñas están en el Keychain de macOS.",
-                    action("Mostrar en Finder") { NSWorkspace.shared.activateFileViewerSelecting([ServerStore.dir]) }),
+            section(L("Almacenamiento"), [
+                row(L("Carpeta de datos"), L("Aquí se guardan tus servidores, cuentas y la llave de Instance Connect. Las contraseñas están en el Keychain de macOS."),
+                    action(L("Mostrar en Finder")) { NSWorkspace.shared.activateFileViewerSelecting([ServerStore.dir]) }),
             ]),
-            section("Restablecer", [
-                row("Restablecer ajustes", "Vuelve todos los ajustes a sus valores originales. No borra servidores ni cuentas.",
-                    action("Restablecer…") { [weak self] in
-                        let a = NSAlert(); a.messageText = "¿Restablecer todos los ajustes?"
-                        a.informativeText = "Tus servidores, cuentas y contraseñas no se tocan."
-                        a.addButton(withTitle: "Restablecer"); a.addButton(withTitle: "Cancelar")
+            section(L("Restablecer"), [
+                row(L("Restablecer ajustes"), L("Vuelve todos los ajustes a sus valores originales. No borra servidores ni cuentas."),
+                    action(L("Restablecer…")) { [weak self] in
+                        let a = NSAlert(); a.messageText = L("¿Restablecer todos los ajustes?")
+                        a.informativeText = L("Tus servidores, cuentas y contraseñas no se tocan.")
+                        a.addButton(withTitle: L("Restablecer")); a.addButton(withTitle: L("Cancelar"))
                         if a.runModal() == .alertFirstButtonReturn { Settings.shared.resetAll(); self?.select(self?.current ?? 0) }
                     }),
             ]),
-            section("Acerca de", [row("Versión", nil, verLabel)]),
+            section(L("Acerca de"), [row(L("Versión"), nil, verLabel)]),
         ]
     }
 
@@ -865,37 +880,37 @@ final class SettingsWindow: NSObject {
         // Contenedor con posiciones explícitas: dentro de un NSStackView los campos (sin ancho propio) quedaban en 0 px.
         let h: CGFloat = confirm ? 58 : 24
         let stack = NSView(frame: NSRect(x: 0, y: 0, width: 280, height: h))
-        let f1 = NSSecureTextField(frame: NSRect(x: 0, y: confirm ? 34 : 0, width: 280, height: 24)); f1.placeholderString = "Contraseña"
-        let f2 = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24)); f2.placeholderString = "Repetir contraseña"
+        let f1 = NSSecureTextField(frame: NSRect(x: 0, y: confirm ? 34 : 0, width: 280, height: 24)); f1.placeholderString = L("Contraseña")
+        let f2 = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24)); f2.placeholderString = L("Repetir contraseña")
         stack.addSubview(f1)
         if confirm { stack.addSubview(f2) }
         let a = NSAlert(); a.messageText = title; a.informativeText = info; a.accessoryView = stack
-        a.addButton(withTitle: "Continuar"); a.addButton(withTitle: "Cancelar")
+        a.addButton(withTitle: L("Continuar")); a.addButton(withTitle: L("Cancelar"))
         a.window.initialFirstResponder = f1
         while true {
             guard a.runModal() == .alertFirstButtonReturn else { return nil }
             if !confirm { return f1.stringValue.isEmpty ? nil : f1.stringValue }
-            if f1.stringValue.count < 8 { a.informativeText = "Usa al menos 8 caracteres.\n\n" + info; continue }
-            if f1.stringValue != f2.stringValue { a.informativeText = "Las contraseñas no coinciden.\n\n" + info; continue }
+            if f1.stringValue.count < 8 { a.informativeText = L("Usa al menos 8 caracteres.\n\n") + info; continue }
+            if f1.stringValue != f2.stringValue { a.informativeText = L("Las contraseñas no coinciden.\n\n") + info; continue }
             return f1.stringValue
         }
     }
 
     private func exportData() {
-        let check = NSButton(checkboxWithTitle: "Incluir contraseñas y claves secretas", target: nil, action: nil)
+        let check = NSButton(checkboxWithTitle: L("Incluir contraseñas y claves secretas"), target: nil, action: nil)
         check.frame = NSRect(x: 0, y: 0, width: 320, height: 22)
         let a = NSAlert()
-        a.messageText = "Exportar servidores y cuentas"
-        a.informativeText = "Sin esta opción el archivo solo tiene los datos de conexión.\n\nSi incluyes las contraseñas, passphrases y claves secretas de AWS, el archivo se cifra con una contraseña que eliges ahora. Sin ella no se puede abrir ni recuperar."
+        a.messageText = L("Exportar servidores y cuentas")
+        a.informativeText = L("Sin esta opción el archivo solo tiene los datos de conexión.\n\nSi incluyes las contraseñas, passphrases y claves secretas de AWS, el archivo se cifra con una contraseña que eliges ahora. Sin ella no se puede abrir ni recuperar.")
         a.accessoryView = check
-        a.addButton(withTitle: "Continuar"); a.addButton(withTitle: "Cancelar")
+        a.addButton(withTitle: L("Continuar")); a.addButton(withTitle: L("Cancelar"))
         guard a.runModal() == .alertFirstButtonReturn else { return }
         let withSecrets = check.state == .on
 
         var pass: String?
         if withSecrets {
-            guard let p = askPassphrase("Contraseña del archivo",
-                                        "Guárdala en un lugar seguro: es la única forma de abrir el archivo.", confirm: true) else { return }
+            guard let p = askPassphrase(L("Contraseña del archivo"),
+                                        L("Guárdala en un lugar seguro: es la única forma de abrir el archivo."), confirm: true) else { return }
             pass = p
         }
         let panel = NSSavePanel()
@@ -927,16 +942,16 @@ final class SettingsWindow: NSObject {
                 try data.write(to: url, options: .atomic)
                 try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
                 await MainActor.run {
-                    var msg = "\(out.servers.count) servidores, \(out.awsAccounts.count) cuentas y \(out.commands?.count ?? 0) comandos guardados en \(url.lastPathComponent)."
+                    var msg = L("%d servidores, %d cuentas y %d comandos guardados en %@.", out.servers.count, out.awsAccounts.count, out.commands?.count ?? 0, url.lastPathComponent)
                     if withSecrets {
-                        msg += "\n\nIncluye \(secrets.srv.count) contraseñas/passphrases y \(secrets.aws.count) claves secretas de AWS, cifradas con tu contraseña."
+                        msg += L("\n\nIncluye %d contraseñas/passphrases y %d claves secretas de AWS, cifradas con tu contraseña.", secrets.srv.count, secrets.aws.count)
                         if servers.contains(where: { $0.auth == .key && !$0.keyPath.isEmpty }) {
-                            msg += "\n\nLas llaves privadas (.pem, id_ed25519…) no se incluyen: solo su ruta. Cópialas aparte al nuevo equipo."
+                            msg += L("\n\nLas llaves privadas (.pem, id_ed25519…) no se incluyen: solo su ruta. Cópialas aparte al nuevo equipo.")
                         }
                     }
-                    showAlert("Exportación completa", msg, window: self.window)
+                    showAlert(L("Exportación completa"), msg, window: self.window)
                 }
-            } catch { await MainActor.run { showAlert("No se pudo exportar", error.localizedDescription, window: self.window) } }
+            } catch { await MainActor.run { showAlert(L("No se pudo exportar"), error.localizedDescription, window: self.window) } }
         }
     }
 
@@ -946,9 +961,9 @@ final class SettingsWindow: NSObject {
         do {
             var data = try Data(contentsOf: url)
             if let env = ExportCrypto.envelope(from: data) {
-                guard let pass = askPassphrase("Archivo cifrado", "Ingresa la contraseña con la que se exportó.", confirm: false) else { return }
+                guard let pass = askPassphrase(L("Archivo cifrado"), L("Ingresa la contraseña con la que se exportó."), confirm: false) else { return }
                 do { data = try ExportCrypto.decrypt(env, passphrase: pass) }
-                catch { return showAlert("No se pudo abrir el archivo", error.localizedDescription, window: window) }
+                catch { return showAlert(L("No se pudo abrir el archivo"), error.localizedDescription, window: window) }
             }
             let imp = try JSONDecoder().decode(Export.self, from: data)
             let st = AppState.shared
@@ -968,11 +983,11 @@ final class SettingsWindow: NSObject {
             }
             let addedC = SnippetStore.shared.add(contentsOf: (imp.commands ?? []).map { Snippet(name: $0.name, command: $0.command, autoRun: $0.autoRun) })
             NotificationCenter.default.post(name: .jtermDataChanged, object: nil)
-            var msg = "Se agregaron \(addedS) servidores, \(addedA) cuentas y \(addedC) comandos."
-            if skipped > 0 { msg += " Se omitieron \(skipped) que ya existían." }
-            msg += restored > 0 ? "\n\nSe restauraron \(restored) contraseñas y claves en el Keychain."
-                                : "\n\nEl archivo no incluía contraseñas: edita cada servidor o cuenta para ingresarlas."
-            showAlert("Importación completa", msg, window: window)
-        } catch { showAlert("No se pudo importar", "El archivo no tiene el formato esperado.\n\(error.localizedDescription)", window: window) }
+            var msg = L("Se agregaron %d servidores, %d cuentas y %d comandos.", addedS, addedA, addedC)
+            if skipped > 0 { msg += L(" Se omitieron %d que ya existían.", skipped) }
+            msg += restored > 0 ? L("\n\nSe restauraron %d contraseñas y claves en el Keychain.", restored)
+                                : L("\n\nEl archivo no incluía contraseñas: edita cada servidor o cuenta para ingresarlas.")
+            showAlert(L("Importación completa"), msg, window: window)
+        } catch { showAlert(L("No se pudo importar"), "El archivo no tiene el formato esperado.\n\(error.localizedDescription)", window: window) }
     }
 }

@@ -15,8 +15,8 @@ struct FinderItem {
 
     var kindLabel: String {
         switch kind {
-        case .tab: return "Pestaña"; case .server: return "Servidor"; case .instance: return "EC2"
-        case .snippet: return "Comando"; case .action: return "Acción"
+        case .tab: return L("Pestaña"); case .server: return L("Servidor"); case .instance: return "EC2"
+        case .snippet: return L("Comando"); case .action: return L("Acción")
         }
     }
 }
@@ -102,7 +102,7 @@ final class QuickFinder: NSObject, NSTableViewDataSource, NSTableViewDelegate, N
     private let field = NSTextField()
     private let table = NSTableView()
     private let scroll = NSScrollView()
-    private let emptyLabel = NSTextField(labelWithString: "Sin resultados")
+    private let emptyLabel = NSTextField(labelWithString: L("Sin resultados"))
     private let divider = NSView()
     private var all: [FinderItem] = []
     private var shown: [FinderItem] = []
@@ -125,7 +125,7 @@ final class QuickFinder: NSObject, NSTableViewDataSource, NSTableViewDelegate, N
         glass.symbolConfiguration = .init(pointSize: 16, weight: .medium); glass.contentTintColor = .secondaryLabelColor
         field.isBordered = false; field.drawsBackground = false; field.focusRingType = .none
         field.font = .systemFont(ofSize: 18); field.textColor = .white
-        field.placeholderAttributedString = NSAttributedString(string: "Buscar servidor, instancia, pestaña o comando…", attributes: [
+        field.placeholderAttributedString = NSAttributedString(string: L("Buscar servidor, instancia, pestaña o comando…"), attributes: [
             .foregroundColor: NSColor.white.withAlphaComponent(0.30), .font: NSFont.systemFont(ofSize: 18)])
         field.delegate = self
         divider.wantsLayer = true; divider.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.08).cgColor
@@ -138,7 +138,7 @@ final class QuickFinder: NSObject, NSTableViewDataSource, NSTableViewDelegate, N
         scroll.documentView = table; scroll.drawsBackground = false; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true
 
         emptyLabel.font = .systemFont(ofSize: 13); emptyLabel.textColor = .secondaryLabelColor; emptyLabel.alignment = .center
-        let hint = NSTextField(labelWithString: "↩ abrir     ⌥↩ pegar y ejecutar comando     ↑↓ moverse     esc cerrar")
+        let hint = NSTextField(labelWithString: L("↩ abrir     ⌥↩ pegar y ejecutar comando     ↑↓ moverse     esc cerrar"))
         hint.font = .systemFont(ofSize: 10); hint.textColor = .tertiaryLabelColor; hint.alignment = .center
 
         for v in [glass, field, divider, scroll, emptyLabel, hint] as [NSView] { v.translatesAutoresizingMaskIntoConstraints = false; box.addSubview(v) }

@@ -405,9 +405,9 @@ final class SplitTab: NSObject, Tab {
         guard panes.count > 1 else { AppState.shared.requestClose(self); return }
         if Settings.shared.confirmClose, active.isConnected {
             let a = NSAlert()
-            a.messageText = "¿Cerrar el panel “\(active.title)”?"
-            a.informativeText = "La conexión está activa y se cerrará."
-            a.addButton(withTitle: "Cerrar"); a.addButton(withTitle: "Cancelar")
+            a.messageText = L("¿Cerrar el panel “%@”?", active.title)
+            a.informativeText = L("La conexión está activa y se cerrará.")
+            a.addButton(withTitle: L("Cerrar")); a.addButton(withTitle: L("Cancelar"))
             guard a.runModal() == .alertFirstButtonReturn else { return }
         }
         close(pane: active)
@@ -451,9 +451,9 @@ final class SplitTab: NSObject, Tab {
         if !broadcast, panes.contains(where: { $0.env == .prod }) {
             let a = NSAlert()
             a.alertStyle = .critical
-            a.messageText = "Hay un panel de PRODUCCIÓN"
-            a.informativeText = "Todo lo que escribas se enviará también a ese panel. Los comandos delicados seguirán pidiendo confirmación en él."
-            a.addButton(withTitle: "Cancelar"); a.addButton(withTitle: "Activar de todos modos")
+            a.messageText = L("Hay un panel de PRODUCCIÓN")
+            a.informativeText = L("Todo lo que escribas se enviará también a ese panel. Los comandos delicados seguirán pidiendo confirmación en él.")
+            a.addButton(withTitle: L("Cancelar")); a.addButton(withTitle: L("Activar de todos modos"))
             guard a.runModal() == .alertSecondButtonReturn else { return }
         }
         broadcast.toggle()

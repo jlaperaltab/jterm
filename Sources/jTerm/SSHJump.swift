@@ -70,9 +70,9 @@ final class JumpPicker: NSStackView {
     init(current: UUID?, excluding id: UUID, servers: [Server]) {
         super.init(frame: .zero)
         candidates = servers.filter { $0.id != id }
-        let caption = NSTextField(labelWithString: "SALTO (PROXYJUMP)")
+        let caption = NSTextField(labelWithString: L("SALTO (PROXYJUMP)"))
         caption.font = .systemFont(ofSize: 10, weight: .semibold); caption.textColor = .tertiaryLabelColor
-        dropdown.items = ["Ninguno (conexión directa)"] + candidates.map { $0.name.isEmpty ? $0.host : $0.name }
+        dropdown.items = [L("Ninguno (conexión directa)")] + candidates.map { $0.name.isEmpty ? $0.host : $0.name }
         dropdown.selectedIndex = current.flatMap { c in candidates.firstIndex { $0.id == c } }.map { $0 + 1 } ?? 0
         orientation = .vertical; alignment = .leading; spacing = 5
         addArrangedSubview(caption); addArrangedSubview(dropdown)

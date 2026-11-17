@@ -16,9 +16,9 @@ enum ExportCryptoError: LocalizedError {
     case badPassphrase, unsupported, derivation
     var errorDescription: String? {
         switch self {
-        case .badPassphrase: return "Contraseña incorrecta o archivo dañado."
-        case .unsupported: return "Formato de archivo no compatible."
-        case .derivation: return "No se pudo derivar la clave de cifrado."
+        case .badPassphrase: return L("Contraseña incorrecta o archivo dañado.")
+        case .unsupported: return L("Formato de archivo no compatible.")
+        case .derivation: return L("No se pudo derivar la clave de cifrado.")
         }
     }
 }

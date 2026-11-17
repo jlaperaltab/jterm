@@ -69,7 +69,7 @@ final class SnippetStore {
     func duplicate(_ id: UUID) {
         guard let i = items.firstIndex(where: { $0.id == id }) else { return }
         var copy = items[i]; copy.id = UUID()
-        copy.name = copy.name.isEmpty ? "" : copy.name + " (copia)"
+        copy.name = copy.name.isEmpty ? "" : copy.name + " " + L("(copia)")
         items.insert(copy, at: i + 1)
         save()
     }

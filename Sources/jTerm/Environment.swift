@@ -5,7 +5,7 @@ enum ServerEnv: String, Codable, CaseIterable {
     case prod, staging, dev
 
     var title: String {
-        switch self { case .prod: return "Producción"; case .staging: return "Staging"; case .dev: return "Desarrollo" }
+        switch self { case .prod: return L("Producción"); case .staging: return "Staging"; case .dev: return L("Desarrollo") }
     }
     /// Texto corto para etiquetas.
     var tag: String {
@@ -47,11 +47,11 @@ final class EnvTag: NSView {
 
 /// Selector de entorno para los editores: Ninguno / Producción / Staging / Desarrollo.
 final class EnvPicker: NSStackView {
-    let segmented = NSSegmentedControl(labels: ["Ninguno"] + ServerEnv.allCases.map(\.title), trackingMode: .selectOne,
+    let segmented = NSSegmentedControl(labels: [L("Ninguno")] + ServerEnv.allCases.map(\.title), trackingMode: .selectOne,
                                        target: nil, action: nil)
     init(selected: ServerEnv?) {
         super.init(frame: .zero)
-        let caption = NSTextField(labelWithString: "ENTORNO")
+        let caption = NSTextField(labelWithString: L("ENTORNO"))
         caption.font = .systemFont(ofSize: 10, weight: .semibold); caption.textColor = .tertiaryLabelColor
         segmented.segmentStyle = .rounded
         segmented.selectedSegment = selected.flatMap { ServerEnv.allCases.firstIndex(of: $0) }.map { $0 + 1 } ?? 0
@@ -69,15 +69,15 @@ final class EnvPicker: NSStackView {
 /// Detecta comandos que conviene confirmar antes de ejecutarlos en producción.
 enum CommandGuard {
     private static let patterns: [(String, String)] = [
-        (#"(?:^|[\s;&|(`])(?:sudo\s+)?rm\s+\S"#, "rm (borra archivos)"),
-        (#"\bdrop\s+(?:table|database|schema|index|view|user|role|column|materialized)\b"#, "DROP (borra objetos de la base de datos)"),
-        (#"\btruncate\s+table\b"#, "TRUNCATE TABLE (vacía una tabla)"),
-        (#"\bdelete\s+from\s+\w+(?![^;]*\bwhere\b)"#, "DELETE sin WHERE (borra todas las filas)"),
-        (#"\bmkfs(?:\.\w+)?\b"#, "mkfs (formatea un disco)"),
-        (#"\bdd\s+[^;|]*\bof="#, "dd (escribe sobre un disco o archivo)"),
-        (#"(?:^|[\s;&|(`])(?:sudo\s+)?(?:shutdown|reboot|halt|poweroff)\b"#, "apagado o reinicio del servidor"),
+        (#"(?:^|[\s;&|(`])(?:sudo\s+)?rm\s+\S"#, L("rm (borra archivos)")),
+        (#"\bdrop\s+(?:table|database|schema|index|view|user|role|column|materialized)\b"#, L("DROP (borra objetos de la base de datos)")),
+        (#"\btruncate\s+table\b"#, L("TRUNCATE TABLE (vacía una tabla)")),
+        (#"\bdelete\s+from\s+\w+(?![^;]*\bwhere\b)"#, L("DELETE sin WHERE (borra todas las filas)")),
+        (#"\bmkfs(?:\.\w+)?\b"#, L("mkfs (formatea un disco)")),
+        (#"\bdd\s+[^;|]*\bof="#, L("dd (escribe sobre un disco o archivo)")),
+        (#"(?:^|[\s;&|(`])(?:sudo\s+)?(?:shutdown|reboot|halt|poweroff)\b"#, L("apagado o reinicio del servidor")),
         (#"\bkubectl\s+delete\b"#, "kubectl delete"),
-        (#"\bdocker\s+(?:rm|rmi|system\s+prune|volume\s+(?:rm|prune)|container\s+prune)\b"#, "docker (borra contenedores o imágenes)"),
+        (#"\bdocker\s+(?:rm|rmi|system\s+prune|volume\s+(?:rm|prune)|container\s+prune)\b"#, L("docker (borra contenedores o imágenes)")),
     ]
     private static let compiled: [(NSRegularExpression, String)] = patterns.compactMap { p, label in
         (try? NSRegularExpression(pattern: p, options: [.caseInsensitive])).map { ($0, label) }

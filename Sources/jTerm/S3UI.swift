@@ -1,7 +1,7 @@
 import AppKit
 
 private let s3DateFmt: DateFormatter = {
-    let f = DateFormatter(); f.dateFormat = "d MMM yyyy HH:mm"; return f
+    let f = DateFormatter(); f.locale = Lang.active.locale; f.dateFormat = "d MMM yyyy HH:mm"; return f
 }()
 
 /// Cuenta bytes de varias transferencias a la vez (se actualiza desde hilos distintos).
@@ -53,7 +53,7 @@ final class S3TransferView: NSView {
         super.init(frame: .zero)
         wantsLayer = true; layer?.backgroundColor = Theme.bg.cgColor
 
-        local.setTitle("Este Mac")
+        local.setTitle(L("Este Mac"))
         local.homePath = NSHomeDirectory()
         local.loader = { dir in try FileSource.local(dir) }
         local.onMkdir = { path in try? FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: false) }
@@ -75,8 +75,8 @@ final class S3TransferView: NSView {
         remote.onTransferSelected = { [weak self] in self?.downloadSelected() }
         remote.extraActions = { [weak self] item in self?.menuActions(for: item) ?? [] }
 
-        let toRemote = IconButton(symbol: "arrow.right", tip: "Subir selección a S3", size: 32, target: self, action: #selector(uploadTapped))
-        let toLocal = IconButton(symbol: "arrow.left", tip: "Descargar selección a este Mac", size: 32, target: self, action: #selector(downloadTapped))
+        let toRemote = IconButton(symbol: "arrow.right", tip: L("Subir selección a S3"), size: 32, target: self, action: #selector(uploadTapped))
+        let toLocal = IconButton(symbol: "arrow.left", tip: L("Descargar selección a este Mac"), size: 32, target: self, action: #selector(downloadTapped))
         let strip = NSStackView(views: [toRemote, toLocal]); strip.orientation = .vertical; strip.spacing = 8
 
         queue.orientation = .vertical; queue.spacing = 6; queue.alignment = .leading
@@ -137,16 +137,16 @@ final class S3TransferView: NSView {
 
     private func makeFolder(_ path: String) async {
         let (bucket, key) = S3Path.parse(path)
-        guard let bucket, !key.isEmpty else { return fail("Abre un bucket primero", "Las carpetas se crean dentro de un bucket; los buckets no se crean desde jTerm.") }
+        guard let bucket, !key.isEmpty else { return fail(L("Abre un bucket primero"), L("Las carpetas se crean dentro de un bucket; los buckets no se crean desde jTerm.")) }
         do { try await client.createFolder(bucket: bucket, prefix: key) }
-        catch { fail("No se pudo crear la carpeta", error.localizedDescription) }
+        catch { fail(L("No se pudo crear la carpeta"), error.localizedDescription) }
     }
 
     private func delete(_ items: [FileItem]) async throws {
         for item in items {
             let (bucket, key) = S3Path.parse(item.path)
             guard let bucket else { continue }
-            if key.isEmpty { throw AWSError(message: "Los buckets no se pueden eliminar desde jTerm.") }
+            if key.isEmpty { throw AWSError(message: L("Los buckets no se pueden eliminar desde jTerm.")) }
             if item.isDir {
                 let all = try await client.list(bucket: bucket, prefix: S3Path.prefix(key), recursive: true).objects.map(\.key)
                 try await client.delete(bucket: bucket, keys: all.isEmpty ? [S3Path.prefix(key)] : all)
@@ -157,9 +157,9 @@ final class S3TransferView: NSView {
     }
 
     private func rename(_ item: FileItem, to newPath: String) async throws {
-        guard !item.isDir else { throw AWSError(message: "S3 no puede renombrar carpetas: habría que copiar y borrar cada objeto.") }
+        guard !item.isDir else { throw AWSError(message: L("S3 no puede renombrar carpetas: habría que copiar y borrar cada objeto.")) }
         let (b1, k1) = S3Path.parse(item.path), (b2, k2) = S3Path.parse(newPath)
-        guard let b1, let b2, b1 == b2, !k1.isEmpty, !k2.isEmpty else { throw AWSError(message: "No se puede renombrar este elemento.") }
+        guard let b1, let b2, b1 == b2, !k1.isEmpty, !k2.isEmpty else { throw AWSError(message: L("No se puede renombrar este elemento.")) }
         try await client.copy(bucket: b1, from: k1, to: k2)
         try await client.delete(bucket: b1, keys: [k1])
     }
@@ -170,7 +170,7 @@ final class S3TransferView: NSView {
         var out: [(title: String, run: () -> Void)] = []
         let uri = "s3://" + bucket + (key.isEmpty ? "" : "/" + key) + (item.isDir ? "/" : "")
         if !item.isDir {
-            out.append(("Copiar URL firmada (1 hora)", { [weak self] in
+            out.append((L("Copiar URL firmada (1 hora)"), { [weak self] in
                 guard let self else { return }
                 Task {
                     do {
@@ -179,11 +179,11 @@ final class S3TransferView: NSView {
                             NSPasteboard.general.clearContents(); NSPasteboard.general.setString(url.absoluteString, forType: .string)
                             NSSound(named: "Pop")?.play()
                         }
-                    } catch { self.fail("No se pudo crear la URL", error.localizedDescription) }
+                    } catch { self.fail(L("No se pudo crear la URL"), error.localizedDescription) }
                 }
             }))
         }
-        out.append(("Copiar ruta de S3", { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(uri, forType: .string) }))
+        out.append((L("Copiar ruta de S3"), { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(uri, forType: .string) }))
         return out
     }
 
@@ -201,7 +201,7 @@ final class S3TransferView: NSView {
         guard !sel.isEmpty else { return NSSound.beep() }
         download(sel.map(\.path), to: local.path)
     }
-    private func describe(_ p: [String]) -> String { p.count == 1 ? (p[0] as NSString).lastPathComponent : "\(p.count) elementos" }
+    private func describe(_ p: [String]) -> String { p.count == 1 ? (p[0] as NSString).lastPathComponent : L("%d elementos", p.count) }
     private func fmt(_ b: Int64) -> String { ByteCountFormatter.string(fromByteCount: b, countStyle: .file) }
 
     /// Una fila en la cola de transferencias y la tarea que la ejecuta (se puede cancelar).
@@ -218,7 +218,7 @@ final class S3TransferView: NSView {
                 await MainActor.run { row.finish(error: nil); done() }
             } catch {
                 let cancelled = error is CancellationError || (error as? URLError)?.code == .cancelled
-                await MainActor.run { row.finish(error: cancelled ? "Cancelado" : error.localizedDescription); done() }
+                await MainActor.run { row.finish(error: cancelled ? L("Cancelado") : error.localizedDescription); done() }
             }
             await MainActor.run { self?.tasks[jobId] = nil }
         }
@@ -234,7 +234,7 @@ final class S3TransferView: NSView {
         let fmt = self.fmt
         let publish: () -> Void = {
             let s = meter.snapshot
-            report(Int(min(100, s.bytes * 100 / total)), "\(s.files)/\(items.count) archivos · \(fmt(s.bytes)) de \(fmt(total))")
+            report(Int(min(100, s.bytes * 100 / total)), L("%d/%d archivos · %@ de %@", s.files, items.count, fmt(s.bytes), fmt(total)))
         }
         try await withThrowingTaskGroup(of: Void.self) { group in
             var next = 0
@@ -255,17 +255,17 @@ final class S3TransferView: NSView {
     func upload(_ paths: [String], to dest: String) {
         let (bucket, key) = S3Path.parse(dest)
         guard let bucket else {
-            return showAlert("Abre un bucket primero", "Entra a un bucket (o a una carpeta dentro de él) para subir archivos.", window: window)
+            return showAlert(L("Abre un bucket primero"), L("Entra a un bucket (o a una carpeta dentro de él) para subir archivos."), window: window)
         }
         let base = S3Path.prefix(key)
         let client = self.client
-        runJob("Subiendo \(describe(paths))", upload: true, done: { [weak self] in self?.remote.reload() }) { report in
+        runJob(L("Subiendo %@", describe(paths)), upload: true, done: { [weak self] in self?.remote.reload() }) { report in
             let (files, emptyDirs) = S3TransferView.scanLocal(paths, base: base)
             for d in emptyDirs { try await client.createFolder(bucket: bucket, prefix: d) }
             try await self.transfer(files, size: { $0.size }, report: report) { f, progress in
                 try await client.upload(file: f.url, bucket: bucket, key: f.key, progress: progress)
             }
-            if files.isEmpty { report(100, "Nada que subir") }
+            if files.isEmpty { report(100, L("Nada que subir")) }
         }
     }
 
@@ -307,7 +307,7 @@ final class S3TransferView: NSView {
         let selected = paths.map { p -> (path: String, isDir: Bool, size: Int64) in
             let it = remote.item(atPath: p); return (p, it?.isDir ?? false, it?.size ?? 0)
         }
-        runJob("Descargando \(describe(paths))", upload: false, done: { [weak self] in self?.local.reload() }) { report in
+        runJob(L("Descargando %@", describe(paths)), upload: false, done: { [weak self] in self?.local.reload() }) { report in
             var files: [(bucket: String, key: String, dest: URL, size: Int64)] = []
             var skipped = 0
             for s in selected {
@@ -330,7 +330,7 @@ final class S3TransferView: NSView {
             try await self.transfer(files, size: { $0.size }, report: report) { f, progress in
                 try await client.download(bucket: f.bucket, key: f.key, to: f.dest, progress: progress)
             }
-            if skipped > 0 { throw AWSError(message: "Se omitieron \(skipped) objetos con nombres que salían de la carpeta de destino.") }
+            if skipped > 0 { throw AWSError(message: L("Se omitieron %d objetos con nombres que salían de la carpeta de destino.", skipped)) }
         }
     }
 }

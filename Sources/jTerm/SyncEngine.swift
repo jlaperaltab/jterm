@@ -195,10 +195,10 @@ enum SyncError: LocalizedError {
     case badPassphrase, downloading, unreadable, noFolder
     var errorDescription: String? {
         switch self {
-        case .badPassphrase: return "La contraseña de sincronización no coincide con la del archivo."
-        case .downloading: return "iCloud todavía está descargando el archivo de sincronización. Se reintentará en un momento."
-        case .unreadable: return "El archivo de sincronización no se puede leer."
-        case .noFolder: return "No se encontró la carpeta de iCloud Drive."
+        case .badPassphrase: return L("La contraseña de sincronización no coincide con la del archivo.")
+        case .downloading: return L("iCloud todavía está descargando el archivo de sincronización. Se reintentará en un momento.")
+        case .unreadable: return L("El archivo de sincronización no se puede leer.")
+        case .noFolder: return L("No se encontró la carpeta de iCloud Drive.")
         }
     }
 }

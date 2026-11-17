@@ -45,7 +45,7 @@ final class Updater {
     private func check(manual: Bool) async {
         guard !busy else { return }
         guard let repo, let current = currentVersion else {
-            if manual { info("Las actualizaciones no están disponibles", "Esta compilación no tiene configurado el repositorio de GitHub (ejecútala desde la app empaquetada con build_app.sh).") }
+            if manual { info(L("Las actualizaciones no están disponibles"), L("Esta compilación no tiene configurado el repositorio de GitHub (ejecútala desde la app empaquetada con build_app.sh).")) }
             return
         }
         busy = true; defer { busy = false }
@@ -54,19 +54,19 @@ final class Updater {
             let rel = try await fetchLatest(repo: repo)
             UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastCheckKey)
             guard Self.isNewer(rel.version, than: current) else {
-                if manual { info("jTerm está al día", "Tienes la versión \(current), que es la más reciente.") }
+                if manual { info(L("jTerm está al día"), L("Tienes la versión %@, que es la más reciente.", current)) }
                 return
             }
             let a = NSAlert()
-            a.messageText = "Hay una versión nueva: jTerm \(rel.version)"
-            a.informativeText = "Tienes la \(current).\(rel.notes.isEmpty ? "" : "\n\n" + String(rel.notes.prefix(600)))"
-            a.addButton(withTitle: "Actualizar ahora"); a.addButton(withTitle: "Más tarde")
+            a.messageText = L("Hay una versión nueva: jTerm %@", rel.version)
+            a.informativeText = L("Tienes la %@.", current) + (rel.notes.isEmpty ? "" : "\n\n" + String(rel.notes.prefix(600)))
+            a.addButton(withTitle: L("Actualizar ahora")); a.addButton(withTitle: L("Más tarde"))
             guard a.runModal() == .alertFirstButtonReturn else { return }
             installing = true
             try await install(rel)
         } catch {
             hideProgress()
-            if manual || installing { info("No se pudo actualizar", error.localizedDescription) }
+            if manual || installing { info(L("No se pudo actualizar"), error.localizedDescription) }
             else { NSLog("jTerm updater: \(error.localizedDescription)") }
         }
     }
@@ -90,19 +90,19 @@ final class Updater {
         let session = URLSession(configuration: .ephemeral, delegate: NoRedirect(), delegateQueue: nil)
         defer { session.finishTasksAndInvalidate() }
         let (_, resp) = try await session.data(for: req)
-        guard let http = resp as? HTTPURLResponse else { throw UpdateError.msg("Respuesta no válida.") }
+        guard let http = resp as? HTTPURLResponse else { throw UpdateError.msg(L("Respuesta no válida.")) }
         guard (300..<400).contains(http.statusCode), let loc = http.value(forHTTPHeaderField: "Location"),
               let range = loc.range(of: "/releases/tag/") else {
             if http.statusCode == 404 || (300..<400).contains(http.statusCode) {
-                throw UpdateError.msg("No hay ningún release publicado en \(repo) (o el repositorio no es público).")
+                throw UpdateError.msg(L("No hay ningún release publicado en %@ (o el repositorio no es público).", repo))
             }
-            throw UpdateError.msg("GitHub respondió con el código \(http.statusCode).")
+            throw UpdateError.msg(L("GitHub respondió con el código %d.", http.statusCode))
         }
         let tag = String(loc[range.upperBound...]).removingPercentEncoding ?? ""
-        guard !tag.isEmpty, !tag.contains("/") else { throw UpdateError.msg("No se pudo leer la versión del release.") }
+        guard !tag.isEmpty, !tag.contains("/") else { throw UpdateError.msg(L("No se pudo leer la versión del release.")) }
         let version = tag.hasPrefix("v") || tag.hasPrefix("V") ? String(tag.dropFirst()) : tag
         let base = "https://github.com/\(repo)/releases/download/\(tag)/jTerm-\(version).dmg"
-        guard let dmg = URL(string: base), let sha = URL(string: base + ".sha256") else { throw UpdateError.msg("Versión no válida: \(tag).") }
+        guard let dmg = URL(string: base), let sha = URL(string: base + ".sha256") else { throw UpdateError.msg(L("Versión no válida: %@.", tag)) }
         return Release(version: version, notes: "", dmg: dmg, sha: sha)
     }
 
@@ -119,16 +119,16 @@ final class Updater {
     // MARK: Instalación
 
     private func install(_ rel: Release) async throws {
-        guard let shaURL = rel.sha else { throw UpdateError.msg("El release no incluye el archivo .sha256; por seguridad no se instala.") }
+        guard let shaURL = rel.sha else { throw UpdateError.msg(L("El release no incluye el archivo .sha256; por seguridad no se instala.")) }
         let dest = Bundle.main.bundleURL
-        guard dest.pathExtension == "app" else { throw UpdateError.msg("jTerm no se está ejecutando desde una .app.") }
+        guard dest.pathExtension == "app" else { throw UpdateError.msg(L("jTerm no se está ejecutando desde una .app.")) }
         let fm = FileManager.default
         guard fm.isWritableFile(atPath: dest.deletingLastPathComponent().path) else {
             // Sin permiso de escritura (p. ej. instalada por otro usuario): descarga manual.
             NSWorkspace.shared.open(rel.dmg)
-            throw UpdateError.msg("No tengo permiso para modificar \(dest.deletingLastPathComponent().path). Se descargará el instalador para que lo arrastres tú.")
+            throw UpdateError.msg(L("No tengo permiso para modificar %@. Se descargará el instalador para que lo arrastres tú.", dest.deletingLastPathComponent().path))
         }
-        showProgress("Descargando jTerm \(rel.version)…")
+        showProgress(L("Descargando jTerm %@…", rel.version))
         defer { hideProgress() }
 
         let work = fm.temporaryDirectory.appendingPathComponent("jterm-update-\(UUID().uuidString)")
@@ -146,27 +146,27 @@ final class Updater {
         let actual = try await Task.detached { () -> String in
             SHA256.hash(data: try Data(contentsOf: dmgFile, options: .mappedIfSafe)).map { String(format: "%02x", $0) }.joined()
         }.value
-        guard expected.count == 64, expected == actual else { throw UpdateError.msg("La descarga está dañada (el SHA-256 no coincide). No se instaló.") }
+        guard expected.count == 64, expected == actual else { throw UpdateError.msg(L("La descarga está dañada (el SHA-256 no coincide). No se instaló.")) }
 
         // 2) Montar el DMG y copiar la app junto a la actual (mismo volumen → el intercambio final es atómico)
-        showProgress("Preparando la actualización…")
+        showProgress(L("Preparando la actualización…"))
         let mount = work.appendingPathComponent("mnt")
         try fm.createDirectory(at: mount, withIntermediateDirectories: true)
         let staged = dest.deletingLastPathComponent().appendingPathComponent(".jTerm-update.app")
         try? fm.removeItem(at: staged)
         let attach = await Self.run("/usr/bin/hdiutil", ["attach", "-nobrowse", "-readonly", "-noverify", "-noautoopen", "-mountpoint", mount.path, dmgFile.path])
-        guard attach.status == 0 else { throw UpdateError.msg("No se pudo abrir el instalador descargado.") }
+        guard attach.status == 0 else { throw UpdateError.msg(L("No se pudo abrir el instalador descargado.")) }
         let copy: (status: Int32, out: String)
         copy = await Self.run("/usr/bin/ditto", [mount.appendingPathComponent("jTerm.app").path, staged.path])
         _ = await Self.run("/usr/bin/hdiutil", ["detach", "-force", mount.path])
-        guard copy.status == 0 else { try? fm.removeItem(at: staged); throw UpdateError.msg("No se pudo copiar la nueva versión.") }
+        guard copy.status == 0 else { try? fm.removeItem(at: staged); throw UpdateError.msg(L("No se pudo copiar la nueva versión.")) }
 
         // 3) Comprobar que lo copiado es jTerm y la versión esperada
         let plist = NSDictionary(contentsOf: staged.appendingPathComponent("Contents/Info.plist"))
         guard plist?["CFBundleIdentifier"] as? String == Bundle.main.bundleIdentifier,
               plist?["CFBundleShortVersionString"] as? String == rel.version else {
             try? fm.removeItem(at: staged)
-            throw UpdateError.msg("El paquete descargado no corresponde a jTerm \(rel.version).")
+            throw UpdateError.msg(L("El paquete descargado no corresponde a jTerm %@.", rel.version))
         }
 
         // 4) Script auxiliar: espera a que salgamos, intercambia y reabre
@@ -217,7 +217,7 @@ final class Updater {
     private func showProgress(_ text: String) {
         if progress == nil {
             let w = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 320, height: 90), styleMask: [.titled], backing: .buffered, defer: false)
-            w.title = "Actualizando jTerm"
+            w.title = L("Actualizando jTerm")
             let label = NSTextField(labelWithString: text); label.tag = 1
             let bar = NSProgressIndicator(); bar.style = .bar; bar.isIndeterminate = true; bar.startAnimation(nil)
             let stack = NSStackView(views: [label, bar]); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 10

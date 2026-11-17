@@ -17,8 +17,8 @@ final class SnippetButton: NSView {
         layer?.cornerRadius = 18; layer?.borderWidth = 1
         layer?.shadowColor = NSColor.black.cgColor; layer?.shadowOpacity = 0.35
         layer?.shadowRadius = 7; layer?.shadowOffset = CGSize(width: 0, height: -1)
-        toolTip = "Comandos guardados (⇧⌘K)"
-        icon.image = NSImage(systemSymbolName: "list.bullet.rectangle", accessibilityDescription: "Comandos guardados")
+        toolTip = L("Comandos guardados (⇧⌘K)")
+        icon.image = NSImage(systemSymbolName: "list.bullet.rectangle", accessibilityDescription: L("Comandos guardados"))
         icon.symbolConfiguration = .init(pointSize: 14, weight: .medium)
         icon.translatesAutoresizingMaskIntoConstraints = false
         addSubview(icon)
@@ -38,8 +38,8 @@ final class SnippetButton: NSView {
         layer?.backgroundColor = (active ? Theme.accent.withAlphaComponent(0.45) : (hovering ? Theme.accent.withAlphaComponent(0.28) : Theme.bar.withAlphaComponent(0.88))).cgColor
         layer?.borderColor = (lit ? Theme.accent : NSColor.white.withAlphaComponent(0.14)).cgColor
         icon.contentTintColor = lit ? .white : .secondaryLabelColor
-        icon.image = NSImage(systemSymbolName: active ? "list.bullet.rectangle.fill" : "list.bullet.rectangle", accessibilityDescription: "Comandos guardados")
-        toolTip = active ? "Cerrar la lista de comandos (⇧⌘K)" : "Comandos guardados (⇧⌘K)"
+        icon.image = NSImage(systemSymbolName: active ? "list.bullet.rectangle.fill" : "list.bullet.rectangle", accessibilityDescription: L("Comandos guardados"))
+        toolTip = active ? L("Cerrar la lista de comandos (⇧⌘K)") : L("Comandos guardados (⇧⌘K)")
         alphaValue = lit ? 1 : 0.8
     }
     override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
@@ -127,9 +127,9 @@ final class SnippetsPopover: NSObject, NSPopoverDelegate, NSTableViewDataSource,
     // MARK: Lista
 
     private func buildList() {
-        search = CompactField(value: "", placeholder: "Buscar comando…", width: 300)
+        search = CompactField(value: "", placeholder: L("Buscar comando…"), width: 300)
         search.field.delegate = self
-        let add = IconButton(symbol: "plus", tip: "Nuevo comando", size: 30, target: self, action: #selector(addTapped))
+        let add = IconButton(symbol: "plus", tip: L("Nuevo comando"), size: 30, target: self, action: #selector(addTapped))
         let top = NSStackView(views: [search, add]); top.spacing = 8
 
         let col = NSTableColumn(identifier: .init("c")); col.resizingMask = .autoresizingMask
@@ -146,7 +146,7 @@ final class SnippetsPopover: NSObject, NSPopoverDelegate, NSTableViewDataSource,
         emptyLabel.font = .systemFont(ofSize: 12); emptyLabel.textColor = .secondaryLabelColor
         emptyLabel.alignment = .center; emptyLabel.maximumNumberOfLines = 0
 
-        let hint = NSTextField(labelWithString: "Clic: pegar en la consola   ·   ⌥ clic: pegar y ejecutar")
+        let hint = NSTextField(labelWithString: L("Clic: pegar en la consola   ·   ⌥ clic: pegar y ejecutar"))
         hint.font = .systemFont(ofSize: 10); hint.textColor = .tertiaryLabelColor
 
         for v in [top, scroll, emptyLabel, hint] { v.translatesAutoresizingMaskIntoConstraints = false; listView.addSubview(v) }
@@ -173,20 +173,20 @@ final class SnippetsPopover: NSObject, NSPopoverDelegate, NSTableViewDataSource,
         table.reloadData()
         let hasAny = !store.items.isEmpty
         emptyLabel.isHidden = !filtered.isEmpty
-        emptyLabel.stringValue = hasAny ? "Ningún comando coincide con la búsqueda."
-                                        : "Aún no hay comandos guardados.\nPulsa + para agregar el primero."
+        emptyLabel.stringValue = hasAny ? L("Ningún comando coincide con la búsqueda.")
+                                        : L("Aún no hay comandos guardados.\nPulsa + para agregar el primero.")
     }
 
     func numberOfRows(in t: NSTableView) -> Int { filtered.count }
 
     func tableView(_ t: NSTableView, viewFor c: NSTableColumn?, row: Int) -> NSView? {
         let s = filtered[row]
-        let title = NSTextField(labelWithString: s.title.isEmpty ? "(vacío)" : s.title)
+        let title = NSTextField(labelWithString: s.title.isEmpty ? L("(vacío)") : s.title)
         title.font = s.name.isEmpty ? .monospacedSystemFont(ofSize: 12, weight: .regular) : .systemFont(ofSize: 12, weight: .semibold)
         title.textColor = .white; title.lineBreakMode = .byTruncatingTail
         title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         var lines: [NSView] = [title]
-        let detail = !s.name.isEmpty ? s.firstLine : (s.lineCount > 1 ? "+\(s.lineCount - 1) líneas más" : "")
+        let detail = !s.name.isEmpty ? s.firstLine : (s.lineCount > 1 ? L("+%d líneas más", s.lineCount - 1) : "")
         if !detail.isEmpty {
             let p = NSTextField(labelWithString: detail)
             p.font = .monospacedSystemFont(ofSize: 11, weight: .regular); p.textColor = .secondaryLabelColor
@@ -198,11 +198,11 @@ final class SnippetsPopover: NSObject, NSPopoverDelegate, NSTableViewDataSource,
         texts.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .horizontal)
         var views: [NSView] = [texts]
         if s.autoRun {
-            let l = NSTextField(labelWithString: "↵ ejecuta")
+            let l = NSTextField(labelWithString: L("↵ ejecuta"))
             l.font = .systemFont(ofSize: 9, weight: .semibold); l.textColor = Theme.accent
             views.append(l)
         }
-        let edit = IconButton(symbol: "square.and.pencil", tip: "Editar", size: 26, target: self, action: #selector(editTapped(_:)))
+        let edit = IconButton(symbol: "square.and.pencil", tip: L("Editar"), size: 26, target: self, action: #selector(editTapped(_:)))
         edit.tag = row
         views.append(edit)
         let line = NSStackView(views: views); line.spacing = 8; line.alignment = .centerY
@@ -246,8 +246,8 @@ final class SnippetsPopover: NSObject, NSPopoverDelegate, NSTableViewDataSource,
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         guard filtered.indices.contains(table.clickedRow) else { return }
-        for (title, sel) in [("Pegar", #selector(menuInsert)), ("Pegar y ejecutar", #selector(menuRun)), ("Editar…", #selector(menuEdit)),
-                             ("Duplicar", #selector(menuDuplicate)), ("Eliminar", #selector(menuDelete))] {
+        for (title, sel) in [(L("Pegar"), #selector(menuInsert)), (L("Pegar y ejecutar"), #selector(menuRun)), (L("Editar…"), #selector(menuEdit)),
+                             (L("Duplicar"), #selector(menuDuplicate)), (L("Eliminar"), #selector(menuDelete))] {
             menu.addItem(withTitle: title, action: sel, keyEquivalent: "").target = self
         }
     }
@@ -259,8 +259,8 @@ final class SnippetsPopover: NSObject, NSPopoverDelegate, NSTableViewDataSource,
     @objc private func menuDelete() { if let s = clicked { confirmDelete(s) } }
 
     private func confirmDelete(_ s: Snippet) {
-        let a = NSAlert(); a.messageText = "¿Eliminar “\(s.title)”?"; a.informativeText = "Se borra de la lista de comandos guardados."
-        a.alertStyle = .warning; a.addButton(withTitle: "Eliminar"); a.addButton(withTitle: "Cancelar")
+        let a = NSAlert(); a.messageText = L("¿Eliminar “%@”?", s.title); a.informativeText = L("Se borra de la lista de comandos guardados.")
+        a.alertStyle = .warning; a.addButton(withTitle: L("Eliminar")); a.addButton(withTitle: L("Cancelar"))
         if a.runModal() == .alertFirstButtonReturn { store.remove(s.id); showList() }
     }
 
@@ -272,25 +272,25 @@ final class SnippetsPopover: NSObject, NSPopoverDelegate, NSTableViewDataSource,
     func showEdit(_ s: Snippet?) {
         editing = s
         editView.subviews.forEach { $0.removeFromSuperview() }
-        let title = NSTextField(labelWithString: s == nil ? "Nuevo comando" : "Editar comando")
+        let title = NSTextField(labelWithString: s == nil ? L("Nuevo comando") : L("Editar comando"))
         title.font = .systemFont(ofSize: 16, weight: .semibold); title.textColor = .white
 
-        let name = CompactField(value: s?.name ?? "", placeholder: "Ej. Reiniciar nginx (opcional)", width: 350)
+        let name = CompactField(value: s?.name ?? "", placeholder: L("Ej. Reiniciar nginx (opcional)"), width: 350)
         let cmd = NotesField(value: s?.command ?? "", placeholder: "", width: 350, height: 150)
         let sw = NSSwitch(); sw.state = (s?.autoRun ?? false) ? .on : .off
-        let runLabel = NSTextField(wrappingLabelWithString: "Ejecutar al insertar (pulsa Enter automáticamente)")
+        let runLabel = NSTextField(wrappingLabelWithString: L("Ejecutar al insertar (pulsa Enter automáticamente)"))
         runLabel.font = .systemFont(ofSize: 12); runLabel.textColor = .white; runLabel.maximumNumberOfLines = 2
         let runRow = NSStackView(views: [sw, runLabel]); runRow.spacing = 10; runRow.alignment = .centerY
         nameField = name; notes = cmd; runSwitch = sw
 
-        let cancel = PillButton("Cancelar", primary: false, target: self, action: #selector(cancelEdit))
-        let save = PillButton("Guardar", primary: true, target: self, action: #selector(saveEdit))
+        let cancel = PillButton(L("Cancelar"), primary: false, target: self, action: #selector(cancelEdit))
+        let save = PillButton(L("Guardar"), primary: true, target: self, action: #selector(saveEdit))
         var btnViews: [NSView] = []
-        if s != nil { btnViews.append(PillButton("Eliminar", primary: false, target: self, action: #selector(deleteEdit))) }
+        if s != nil { btnViews.append(PillButton(L("Eliminar"), primary: false, target: self, action: #selector(deleteEdit))) }
         btnViews += [NSView(), cancel, save]
         let buttons = NSStackView(views: btnViews); buttons.spacing = 8
 
-        let form = NSStackView(views: [title, smallCaption("Nombre"), name, smallCaption("Comando"), cmd, runRow, buttons])
+        let form = NSStackView(views: [title, smallCaption(L("Nombre")), name, smallCaption(L("Comando")), cmd, runRow, buttons])
         form.orientation = .vertical; form.alignment = .leading; form.spacing = 6
         form.setCustomSpacing(14, after: title); form.setCustomSpacing(12, after: name)
         form.setCustomSpacing(14, after: cmd); form.setCustomSpacing(18, after: runRow)

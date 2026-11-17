@@ -136,7 +136,7 @@ enum OrderedJSON {
 enum LogLevel: Int, CaseIterable {
     case error, warn, info, debug, platform
     var label: String { ["ERROR", "WARN", "INFO", "DEBUG", "LAMBDA"][rawValue] }
-    var filterTitle: String { ["ERROR", "WARN", "INFO", "DEBUG", "Plataforma"][rawValue] }
+    var filterTitle: String { ["ERROR", "WARN", "INFO", "DEBUG", L("Plataforma")][rawValue] }
 }
 enum LogPlatform { case start, end, report, other }
 

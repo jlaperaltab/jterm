@@ -139,7 +139,7 @@ final class SFTPSession {
         for _ in 0..<100 {
             if !p.isRunning {
                 let msg = String(decoding: masterErr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).trimmed
-                throw AWSError(message: msg.isEmpty ? "La conexión SSH terminó inesperadamente." : msg)
+                throw AWSError(message: msg.isEmpty ? L("La conexión SSH terminó inesperadamente.") : msg)
             }
             if FileManager.default.fileExists(atPath: sock) {
                 let r = await runProcess("/usr/bin/ssh", ["-S", sock, "-O", "check", target.destination])
@@ -147,7 +147,7 @@ final class SFTPSession {
             }
             try await Task.sleep(nanoseconds: 200_000_000)
         }
-        guard ready else { close(); throw AWSError(message: "Tiempo de espera agotado al conectar con \(target.host).") }
+        guard ready else { close(); throw AWSError(message: L("Tiempo de espera agotado al conectar con %@.", target.host)) }
         home = (try? await pwd()) ?? "/"
     }
 
@@ -190,7 +190,7 @@ final class SFTPSession {
                                                    "-b", batch, target.destination], env: env)
         guard r.status == 0 else {
             let msg = clean(r.err + "\n" + r.out)
-            throw AWSError(message: msg.isEmpty ? "sftp terminó con código \(r.status)." : msg)
+            throw AWSError(message: msg.isEmpty ? L("sftp terminó con código %d.", Int(r.status)) : msg)
         }
         return r.out
     }
@@ -216,7 +216,7 @@ final class SFTPSession {
     func removeRemote(_ paths: [String]) async throws {
         let cmd = "rm -rf -- " + paths.map(SFTPQuote.shell).joined(separator: " ")
         let r = await runProcess("/usr/bin/ssh", ["-S", sock, target.destination, cmd], env: env)
-        guard r.status == 0 else { throw AWSError(message: r.err.trimmed.isEmpty ? "No se pudo eliminar." : r.err.trimmed) }
+        guard r.status == 0 else { throw AWSError(message: r.err.trimmed.isEmpty ? L("No se pudo eliminar.") : r.err.trimmed) }
     }
 
     // MARK: Transferencias con progreso
@@ -265,10 +265,10 @@ final class SFTPSession {
             DispatchQueue.global().async { p.waitUntilExit(); c.resume() }
         }
         out.fileHandleForReading.readabilityHandler = nil
-        if job.cancelled { throw AWSError(message: "Cancelado") }
+        if job.cancelled { throw AWSError(message: L("Cancelado")) }
         guard p.terminationStatus == 0 else {
             let msg = clean(box.text).replacingOccurrences(of: "\u{04}\u{08}\u{08}", with: "")
-            throw AWSError(message: msg.isEmpty ? "La transferencia falló (código \(p.terminationStatus))." : msg)
+            throw AWSError(message: msg.isEmpty ? L("La transferencia falló (código %d).", Int(p.terminationStatus)) : msg)
         }
     }
 }

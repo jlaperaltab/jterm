@@ -5,6 +5,7 @@ enum AuthMethod: String, Codable, CaseIterable, Identifiable {
     case password = "Contraseña"
     case key = "Llave (key)"
     var id: String { rawValue }
+    var label: String { L(rawValue) }
 }
 
 struct Server: Identifiable, Codable, Hashable {

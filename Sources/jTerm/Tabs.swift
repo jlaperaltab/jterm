@@ -184,17 +184,17 @@ final class JTermTerminalView: LocalProcessTerminalView {
         guard risk != nil || multi else { return true }
 
         let preview = lines.prefix(8).map { $0.count > 100 ? String($0.prefix(100)) + "…" : $0 }.joined(separator: "\n")
-            + (lines.count > 8 ? "\n… y \(lines.count - 8) líneas más" : "")
+            + (lines.count > 8 ? L("\n… y %d líneas más", lines.count - 8) : "")
         let a = NSAlert()
         a.alertStyle = risk != nil ? .critical : .warning
         if let risk {
-            a.messageText = "Comando delicado en PRODUCCIÓN"
-            a.informativeText = "Vas a pegar en “\(envName)”: \(risk).\n\n\(preview)"
+            a.messageText = L("Comando delicado en PRODUCCIÓN")
+            a.informativeText = L("Vas a pegar en “%@”: %@.\n\n%@", envName, risk, preview)
         } else {
-            a.messageText = "¿Pegar \(lines.count) líneas?"
-            a.informativeText = "Se enviarán al terminal. Si alguna línea es un comando, se ejecutará.\n\n\(preview)"
+            a.messageText = L("¿Pegar %d líneas?", lines.count)
+            a.informativeText = L("Se enviarán al terminal. Si alguna línea es un comando, se ejecutará.\n\n%@", preview)
         }
-        a.addButton(withTitle: "Cancelar"); a.addButton(withTitle: "Pegar de todos modos")
+        a.addButton(withTitle: L("Cancelar")); a.addButton(withTitle: L("Pegar de todos modos"))
         return a.runModal() == .alertSecondButtonReturn
     }
 
@@ -218,9 +218,9 @@ final class JTermTerminalView: LocalProcessTerminalView {
         guard let risk = CommandGuard.risk(in: text) else { return true }
         let a = NSAlert()
         a.alertStyle = .critical
-        a.messageText = "Comando delicado en PRODUCCIÓN"
-        a.informativeText = "Estás en “\(envName)”: \(risk).\n\n\(text.trimmingCharacters(in: .whitespaces))"
-        a.addButton(withTitle: "Cancelar"); a.addButton(withTitle: "Ejecutar de todos modos")
+        a.messageText = L("Comando delicado en PRODUCCIÓN")
+        a.informativeText = L("Estás en “%@”: %@.\n\n%@", envName, risk, text.trimmingCharacters(in: .whitespaces))
+        a.addButton(withTitle: L("Cancelar")); a.addButton(withTitle: L("Ejecutar de todos modos"))
         return a.runModal() == .alertSecondButtonReturn
     }
 
@@ -426,7 +426,7 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
             env["TERMINAL_SECRET"] = secret
         } else if status != errSecItemNotFound {
             let msg = SecCopyErrorMessageString(status, nil) as String? ?? "OSStatus \(status)"
-            warning = "[jTerm] No se pudo leer la contraseña del Keychain: \(msg). Escríbela a mano si ssh la pide."
+            warning = L("[jTerm] No se pudo leer la contraseña del Keychain: %@. Escríbela a mano si ssh la pide.", msg)
         }
         args.append(s.user.isEmpty ? s.host : "\(s.user)@\(s.host)")
         let tab = TerminalTab(title: s.name.isEmpty ? s.host : s.name,
@@ -482,7 +482,7 @@ final class TerminalTab: NSObject, LocalProcessTerminalViewDelegate, Tab {
             if self.closesOnExit || (exitCode == 0 && !self.isSSH) { self.onExit?(self); return }
             AppState.shared.onChange?()
             let code = exitCode.map(String.init) ?? "?"
-            self.view.feed(text: "\r\n\u{1b}[31m[jTerm] La conexión terminó (código \(code)). Cierra la pestaña con ⌘W.\u{1b}[0m\r\n")
+            self.view.feed(text: "\r\n\u{1b}[31m" + L("[jTerm] La conexión terminó (código %@). Cierra la pestaña con ⌘W.", code) + "\u{1b}[0m\r\n")
         }
     }
 }
@@ -525,9 +525,9 @@ final class AppState {
         case .starting, .active:
             TunnelManager.shared.stop(t.id)
         case .stopped, .failed:
-            if let e = t.validationError() { return showAlert("Túnel no válido", e, window: window) }
+            if let e = t.validationError() { return showAlert(L("Túnel no válido"), e, window: window) }
             guard let server = store.servers.first(where: { $0.id == t.serverId }) else {
-                return showAlert("Falta el servidor", "El servidor de este túnel ya no existe. Edita el túnel y elige otro.", window: window)
+                return showAlert(L("Falta el servidor"), L("El servidor de este túnel ya no existe. Edita el túnel y elige otro."), window: window)
             }
             TunnelManager.shared.start(t, server: server)
         }
@@ -565,9 +565,9 @@ final class AppState {
     func requestClose(_ tab: Tab) {
         if Settings.shared.confirmClose, tab.isConnected {
             let a = NSAlert()
-            a.messageText = "¿Cerrar “\(tab.title)”?"
-            a.informativeText = "La conexión está activa y se cerrará."
-            a.addButton(withTitle: "Cerrar"); a.addButton(withTitle: "Cancelar")
+            a.messageText = L("¿Cerrar “%@”?", tab.title)
+            a.informativeText = L("La conexión está activa y se cerrará.")
+            a.addButton(withTitle: L("Cerrar")); a.addButton(withTitle: L("Cancelar"))
             guard a.runModal() == .alertFirstButtonReturn else { return }
         }
         close(tab)

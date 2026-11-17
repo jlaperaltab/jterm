@@ -100,7 +100,7 @@ final class SyncManager: SyncLocalAdapter {
         if isSyncing { pendingRerun = true; return }
         guard let storage, let pass = passphrase else {
             needsPassphrase = passphrase == nil
-            lastError = storage == nil ? SyncError.noFolder.localizedDescription : "Falta la contraseña de sincronización."
+            lastError = storage == nil ? SyncError.noFolder.localizedDescription : L("Falta la contraseña de sincronización.")
             notify(); completion?(.failure(SyncError.noFolder)); return
         }
         isSyncing = true; notify()

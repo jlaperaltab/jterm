@@ -91,7 +91,7 @@ final class StyledField: NSStackView {
             p.translatesAutoresizingMaskIntoConstraints = false
             p.isHidden = true
             box.addSubview(p)
-            let e = IconButton(symbol: "eye", tip: "Mostrar contraseña", size: 24, target: self, action: #selector(toggleReveal))
+            let e = IconButton(symbol: "eye", tip: L("Mostrar contraseña"), size: 24, target: self, action: #selector(toggleReveal))
             box.addSubview(e)
             NSLayoutConstraint.activate([
                 e.trailingAnchor.constraint(equalTo: box.trailingAnchor, constant: -5),
@@ -134,7 +134,7 @@ final class StyledField: NSStackView {
             window?.makeFirstResponder(secure)
         }
         eye.image = NSImage(systemSymbolName: showing ? "eye.slash" : "eye", accessibilityDescription: nil)
-        eye.toolTip = showing ? "Ocultar contraseña" : "Mostrar contraseña"
+        eye.toolTip = showing ? L("Ocultar contraseña") : L("Mostrar contraseña")
     }
 
     func setFocused(_ on: Bool) {
@@ -175,7 +175,7 @@ final class ServerEditor: NSObject {
                                 styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
     private let name = FocusField(), host = FocusField(), port = FocusField(), user = FocusField()
     private let key = FocusField(), secret = SecureFocusField()
-    private let auth = NSSegmentedControl(labels: AuthMethod.allCases.map(\.rawValue), trackingMode: .selectOne,
+    private let auth = NSSegmentedControl(labels: AuthMethod.allCases.map(\.label), trackingMode: .selectOne,
                                           target: nil, action: nil)
     private var keyRow: NSView!
     private var secretField: StyledField!
@@ -207,46 +207,46 @@ final class ServerEditor: NSObject {
         NSLayoutConstraint.activate([
             badge.widthAnchor.constraint(equalToConstant: 40), badge.heightAnchor.constraint(equalToConstant: 40),
             sym.centerXAnchor.constraint(equalTo: badge.centerXAnchor), sym.centerYAnchor.constraint(equalTo: badge.centerYAnchor)])
-        let title = NSTextField(labelWithString: isNew ? "Nuevo servidor" : "Editar servidor")
+        let title = NSTextField(labelWithString: isNew ? L("Nuevo servidor") : L("Editar servidor"))
         title.font = .systemFont(ofSize: 17, weight: .semibold); title.textColor = .white
-        let sub = NSTextField(labelWithString: "Conexión por SSH")
+        let sub = NSTextField(labelWithString: L("Conexión por SSH"))
         sub.font = .systemFont(ofSize: 12); sub.textColor = .secondaryLabelColor
         let titles = NSStackView(views: [title, sub]); titles.orientation = .vertical; titles.alignment = .leading; titles.spacing = 1
         let header = NSStackView(views: [badge, titles]); header.spacing = 12
 
         // Campos
-        let nameF = StyledField("Nombre", field: name, symbol: "tag", placeholder: "Producción, Staging…")
+        let nameF = StyledField(L("Nombre"), field: name, symbol: "tag", placeholder: L("Producción, Staging…"))
         let hostF = StyledField("Host o IP", field: host, symbol: "network", placeholder: "192.168.1.10")
-        let portF = StyledField("Puerto", field: port, placeholder: "22")
+        let portF = StyledField(L("Puerto"), field: port, placeholder: "22")
         portF.widthAnchor.constraint(equalToConstant: 90).isActive = true
         let hostRow = NSStackView(views: [hostF, portF]); hostRow.spacing = 10; hostRow.alignment = .top
         hostRow.distribution = .fill
-        let userF = StyledField("Usuario", field: user, symbol: "person", placeholder: "root")
+        let userF = StyledField(L("Usuario"), field: user, symbol: "person", placeholder: "root")
         envPicker = EnvPicker(selected: self.server.env)
         jumpPicker = JumpPicker(current: self.server.jump, excluding: self.server.id, servers: AppState.shared.store.servers)
 
         auth.segmentStyle = .rounded
         auth.selectedSegment = AuthMethod.allCases.firstIndex(of: self.server.auth) ?? 0
         auth.target = self; auth.action = #selector(authChanged)
-        let authCaption = NSTextField(labelWithString: "ACCESO")
+        let authCaption = NSTextField(labelWithString: L("ACCESO"))
         authCaption.font = .systemFont(ofSize: 10, weight: .semibold); authCaption.textColor = .tertiaryLabelColor
         let authBox = NSStackView(views: [authCaption, auth]); authBox.orientation = .vertical; authBox.alignment = .leading; authBox.spacing = 5
 
-        let keyF = StyledField("Llave privada", field: key, symbol: "key", placeholder: "~/.ssh/id_ed25519")
-        let pick = PillButton("Elegir…", primary: false, target: self, action: #selector(pickKey))
+        let keyF = StyledField(L("Llave privada"), field: key, symbol: "key", placeholder: "~/.ssh/id_ed25519")
+        let pick = PillButton(L("Elegir…"), primary: false, target: self, action: #selector(pickKey))
         pick.widthAnchor.constraint(greaterThanOrEqualToConstant: 80).isActive = true
         let kr = NSStackView(views: [keyF, pick]); kr.spacing = 10; kr.alignment = .bottom
         keyRow = kr
-        secretField = StyledField("Contraseña", field: secret, symbol: "lock", placeholder: "••••••••", revealable: true)
+        secretField = StyledField(L("Contraseña"), field: secret, symbol: "lock", placeholder: "••••••••", revealable: true)
 
         let lock = NSImageView(image: NSImage(systemSymbolName: "lock.shield", accessibilityDescription: nil)!)
         lock.symbolConfiguration = .init(pointSize: 11, weight: .regular); lock.contentTintColor = .tertiaryLabelColor
-        let note = NSTextField(labelWithString: "Los secretos se guardan en el Keychain de macOS.")
+        let note = NSTextField(labelWithString: L("Los secretos se guardan en el Keychain de macOS."))
         note.font = .systemFont(ofSize: 11); note.textColor = .tertiaryLabelColor
         let noteRow = NSStackView(views: [lock, note]); noteRow.spacing = 5
 
-        let cancel = PillButton("Cancelar", primary: false, target: self, action: #selector(cancel)); cancel.keyEquivalent = "\u{1b}"
-        let save = PillButton("Guardar", primary: true, target: self, action: #selector(save)); save.keyEquivalent = "\r"
+        let cancel = PillButton(L("Cancelar"), primary: false, target: self, action: #selector(cancel)); cancel.keyEquivalent = "\u{1b}"
+        let save = PillButton(L("Guardar"), primary: true, target: self, action: #selector(save)); save.keyEquivalent = "\r"
         let buttons = NSStackView(views: [NSView(), cancel, save]); buttons.spacing = 8
 
         form.orientation = .vertical; form.alignment = .leading; form.spacing = 14
@@ -278,7 +278,7 @@ final class ServerEditor: NSObject {
     @objc private func authChanged() {
         let isKey = auth.selectedSegment == 1
         keyRow.isHidden = !isKey
-        (secretField.arrangedSubviews.first as? NSTextField)?.stringValue = (isKey ? "Passphrase (opcional)" : "Contraseña").uppercased()
+        (secretField.arrangedSubviews.first as? NSTextField)?.stringValue = (isKey ? L("Passphrase (opcional)") : L("Contraseña")).uppercased()
         form.layoutSubtreeIfNeeded()
         panel.setContentSize(NSSize(width: 460, height: form.fittingSize.height))
     }

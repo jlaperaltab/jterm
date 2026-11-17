@@ -30,7 +30,7 @@ final class TabButton: NSView {
         label.lineBreakMode = .byTruncatingTail
         icon.image = NSImage(systemSymbolName: tab.isRecording ? "record.circle.fill" : tab.iconName, accessibilityDescription: nil)
         icon.symbolConfiguration = .init(pointSize: 11, weight: .regular)
-        close.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Cerrar")
+        close.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: L("Cerrar"))
         close.symbolConfiguration = .init(pointSize: 9, weight: .bold)
         close.isBordered = false
         close.target = self; close.action = #selector(closeTab)
@@ -106,7 +106,7 @@ final class TabBar: NSView {
         toggleButton.contentTintColor = sidebarVisible ? Theme.accent : .secondaryLabelColor
         toggleButton.layer?.backgroundColor = (sidebarVisible ? Theme.accent.withAlphaComponent(0.20) : NSColor.white.withAlphaComponent(0.045)).cgColor
         toggleButton.layer?.borderColor = (sidebarVisible ? Theme.accent.withAlphaComponent(0.55) : NSColor.white.withAlphaComponent(0.09)).cgColor
-        toggleButton.toolTip = sidebarVisible ? "Ocultar la barra lateral (⌘B)" : "Mostrar la barra lateral (⌘B)"
+        toggleButton.toolTip = sidebarVisible ? L("Ocultar la barra lateral (⌘B)") : L("Mostrar la barra lateral (⌘B)")
     }
 
     override init(frame: NSRect) {
@@ -115,16 +115,16 @@ final class TabBar: NSView {
         wantsLayer = true
         layer?.backgroundColor = Theme.bar.cgColor
         let toggle = toggleButton
-        toggle.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: "Servidores")
+        toggle.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: L("Servidores"))
         toggle.target = self; toggle.action = #selector(self.toggle)
         toggle.isBordered = false; toggle.wantsLayer = true; toggle.layer?.cornerRadius = 4; toggle.layer?.borderWidth = 1
         let plus = BarButton()
-        plus.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "Nueva pestaña")
+        plus.image = NSImage(systemSymbolName: "plus", accessibilityDescription: L("Nueva pestaña"))
         plus.target = self; plus.action = #selector(newTab)
         stylePill(plus)
-        filesButton.image = NSImage(systemSymbolName: "arrow.left.arrow.right.square", accessibilityDescription: "Transferir archivos")
+        filesButton.image = NSImage(systemSymbolName: "arrow.left.arrow.right.square", accessibilityDescription: L("Transferir archivos"))
         stylePill(filesButton)
-        filesButton.toolTip = "Transferir archivos de esta conexión"
+        filesButton.toolTip = L("Transferir archivos de esta conexión")
         filesButton.target = self; filesButton.action = #selector(openFiles)
         stack.spacing = 6
         let row = NSStackView(views: [toggle, stack, plus, filesButton])
@@ -176,14 +176,14 @@ final class Sidebar: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenuD
         wantsLayer = true
         layer?.backgroundColor = Theme.bar.withAlphaComponent(0.6).cgColor
 
-        let seg = NSSegmentedControl(labels: ["Servidores", "AWS", "Túneles"], trackingMode: .selectOne,
+        let seg = NSSegmentedControl(labels: [L("Servidores"), "AWS", L("Túneles")], trackingMode: .selectOne,
                                      target: self, action: #selector(switchTab(_:)))
         seg.selectedSegment = 0; seg.segmentStyle = .texturedRounded
 
         // Lista de servidores
-        let title = NSTextField(labelWithString: "GUARDADOS")
+        let title = NSTextField(labelWithString: L("GUARDADOS"))
         title.font = .systemFont(ofSize: 11, weight: .semibold); title.textColor = .secondaryLabelColor
-        let add = NSButton(image: NSImage(systemSymbolName: "plus", accessibilityDescription: "Agregar")!,
+        let add = NSButton(image: NSImage(systemSymbolName: "plus", accessibilityDescription: L("Agregar"))!,
                            target: self, action: #selector(addServer))
         add.isBordered = false; add.contentTintColor = .secondaryLabelColor
         let header = NSStackView(views: [title, NSView(), add])
@@ -274,10 +274,10 @@ final class Sidebar: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenuD
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         guard table.clickedRow >= 0 else { return }
-        menu.addItem(withTitle: "Conectar", action: #selector(connect), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "Transferir archivos…", action: #selector(files), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "Editar…", action: #selector(edit), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "Eliminar", action: #selector(remove), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L("Conectar"), action: #selector(connect), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L("Transferir archivos…"), action: #selector(files), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L("Editar…"), action: #selector(edit), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L("Eliminar"), action: #selector(remove), keyEquivalent: "").target = self
     }
     @objc private func files() {
         let r = table.clickedRow; guard r >= 0 else { return }

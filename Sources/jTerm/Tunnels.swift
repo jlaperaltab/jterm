@@ -9,7 +9,7 @@ extension Notification.Name {
 struct Tunnel: Codable, Identifiable, Hashable {
     enum Kind: String, Codable, CaseIterable {
         case local, remote
-        var title: String { self == .local ? "Local (-L)" : "Remoto (-R)" }
+        var title: String { self == .local ? "Local (-L)" : L("Remoto (-R)") }
     }
     var id = UUID()
     var name = ""
@@ -29,17 +29,17 @@ struct Tunnel: Codable, Identifiable, Hashable {
     }
     var flag: String { kind == .local ? "-L" : "-R" }
     var summary: String {
-        kind == .local ? "localhost:\(listenPort) → \(destHost):\(destPort)" : "servidor:\(listenPort) → \(destHost):\(destPort)"
+        kind == .local ? "localhost:\(listenPort) → \(destHost):\(destPort)" : L("servidor:%d → %@:%d", listenPort, destHost, destPort)
     }
     var title: String { name.isEmpty ? summary : name }
 
     /// Texto del problema si los datos no sirven, o nil si están bien.
     func validationError() -> String? {
-        if !(1...65535).contains(listenPort) { return "El puerto debe estar entre 1 y 65535." }
-        if !(1...65535).contains(destPort) { return "El puerto de destino debe estar entre 1 y 65535." }
-        if destHost.trimmingCharacters(in: .whitespaces).isEmpty || destHost.contains(" ") { return "Indica el host de destino (sin espacios)." }
-        if kind == .local, listenPort < 1024, getuid() != 0 { return "Los puertos menores a 1024 solo los puede abrir el administrador. Usa uno mayor." }
-        if serverId == nil { return "Elige el servidor por el que pasa el túnel." }
+        if !(1...65535).contains(listenPort) { return L("El puerto debe estar entre 1 y 65535.") }
+        if !(1...65535).contains(destPort) { return L("El puerto de destino debe estar entre 1 y 65535.") }
+        if destHost.trimmingCharacters(in: .whitespaces).isEmpty || destHost.contains(" ") { return L("Indica el host de destino (sin espacios).") }
+        if kind == .local, listenPort < 1024, getuid() != 0 { return L("Los puertos menores a 1024 solo los puede abrir el administrador. Usa uno mayor.") }
+        if serverId == nil { return L("Elige el servidor por el que pasa el túnel.") }
         return nil
     }
 }
@@ -136,7 +136,7 @@ final class TunnelManager {
             }
         }
         do { try p.run() } catch {
-            set(t.id, .failed("No se pudo ejecutar ssh: \(error.localizedDescription)")); return
+            set(t.id, .failed(L("No se pudo ejecutar ssh: %@", error.localizedDescription))); return
         }
         procs[t.id] = p
     }
@@ -171,17 +171,17 @@ final class TunnelManager {
     static func explain(stderr: String, tunnel t: Tunnel, status: Int32, wasActive: Bool) -> String {
         let low = stderr.lowercased()
         if low.contains("address already in use") || low.contains("cannot listen") && low.contains("port") {
-            return "El puerto \(t.listenPort) ya está en uso\(t.kind == .local ? " en este Mac" : " en el servidor"). Cierra lo que lo usa o elige otro."
+            return t.kind == .local ? L("El puerto %d ya está en uso en este Mac. Cierra lo que lo usa o elige otro.", t.listenPort) : L("El puerto %d ya está en uso en el servidor. Cierra lo que lo usa o elige otro.", t.listenPort)
         }
-        if low.contains("remote port forwarding failed") { return "El servidor rechazó el reenvío remoto del puerto \(t.listenPort) (¿ocupado o no permitido?)." }
-        if low.contains("administratively prohibited") || low.contains("open failed") { return "El servidor no permite este reenvío (AllowTcpForwarding)." }
-        if low.contains("permission denied") { return "El servidor rechazó la autenticación. Revisa la contraseña guardada o la llave." }
-        if low.contains("connection refused") { return "Conexión rechazada por el servidor." }
-        if low.contains("timed out") || low.contains("no route to host") { return "No se pudo llegar al servidor (tiempo agotado)." }
-        if low.contains("could not resolve") || low.contains("name or service not known") { return "No se encontró el servidor (revisa el host)." }
-        if low.contains("host key verification failed") { return "No se pudo verificar la llave del servidor (revisa known_hosts)." }
+        if low.contains("remote port forwarding failed") { return L("El servidor rechazó el reenvío remoto del puerto %d (¿ocupado o no permitido?).", t.listenPort) }
+        if low.contains("administratively prohibited") || low.contains("open failed") { return L("El servidor no permite este reenvío (AllowTcpForwarding).") }
+        if low.contains("permission denied") { return L("El servidor rechazó la autenticación. Revisa la contraseña guardada o la llave.") }
+        if low.contains("connection refused") { return L("Conexión rechazada por el servidor.") }
+        if low.contains("timed out") || low.contains("no route to host") { return L("No se pudo llegar al servidor (tiempo agotado).") }
+        if low.contains("could not resolve") || low.contains("name or service not known") { return L("No se encontró el servidor (revisa el host).") }
+        if low.contains("host key verification failed") { return L("No se pudo verificar la llave del servidor (revisa known_hosts).") }
         let last = stderr.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.last { !$0.isEmpty }
         if let last { return last }
-        return wasActive ? "La conexión del túnel se cerró." : "ssh terminó con el código \(status)."
+        return wasActive ? L("La conexión del túnel se cerró.") : L("ssh terminó con el código %d.", Int(status))
     }
 }

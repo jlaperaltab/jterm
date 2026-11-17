@@ -40,7 +40,7 @@ final class AWSStore {
         let (secret, status) = Keychain.read(a.id)
         guard let secret, !secret.isEmpty else {
             let msg = SecCopyErrorMessageString(status, nil) as String? ?? "OSStatus \(status)"
-            throw AWSError(message: "No se pudo leer la clave secreta del Keychain: \(msg)")
+            throw AWSError(message: L("No se pudo leer la clave secreta del Keychain: %@", msg))
         }
         return AWSCredentials(accessKey: a.accessKeyId, secret: secret)
     }
@@ -55,10 +55,10 @@ enum EICKey {
             p.executableURL = URL(fileURLWithPath: "/usr/bin/ssh-keygen")
             p.arguments = ["-q", "-t", "ed25519", "-N", "", "-C", "jterm-instance-connect", "-f", path]
             try p.run(); p.waitUntilExit()
-            guard p.terminationStatus == 0 else { throw AWSError(message: "No se pudo generar la llave SSH (ssh-keygen).") }
+            guard p.terminationStatus == 0 else { throw AWSError(message: L("No se pudo generar la llave SSH (ssh-keygen).")) }
         }
         guard let pub = try? String(contentsOfFile: path + ".pub").trimmingCharacters(in: .whitespacesAndNewlines) else {
-            throw AWSError(message: "No se pudo leer la llave pública.")
+            throw AWSError(message: L("No se pudo leer la llave pública."))
         }
         return (path, pub)
     }
@@ -69,6 +69,7 @@ enum EICKey {
 final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate {
     var store: AWSStore { AppState.shared.awsStore }
     private var instances: [EC2Instance] = []
+    private let allRegions = L("Todas las regiones")
     private let accountPopup = Dropdown(symbol: "cloud")
     private let regionPopup = Dropdown(symbol: "globe")
     private let status = NSTextField(wrappingLabelWithString: "")
@@ -88,20 +89,20 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        accountPopup.placeholder = "Sin cuentas"
+        accountPopup.placeholder = L("Sin cuentas")
         accountPopup.onChange = { [weak self] in self?.accountChanged() }
-        regionPopup.items = ["Todas las regiones"] + AWSClient.regions
+        regionPopup.items = [allRegions] + AWSClient.regions
         regionPopup.separatorAfter = [0]
         regionPopup.onChange = { [weak self] in self?.refresh() }
 
-        let more = IconButton(symbol: "ellipsis", tip: "Opciones de la cuenta", target: self, action: #selector(showMore(_:)))
-        let add = IconButton(symbol: "plus", tip: "Agregar cuenta", target: self, action: #selector(addAccount))
-        let refreshBtn = IconButton(symbol: "arrow.clockwise", tip: "Actualizar instancias", target: self, action: #selector(refresh))
+        let more = IconButton(symbol: "ellipsis", tip: L("Opciones de la cuenta"), target: self, action: #selector(showMore(_:)))
+        let add = IconButton(symbol: "plus", tip: L("Agregar cuenta"), target: self, action: #selector(addAccount))
+        let refreshBtn = IconButton(symbol: "arrow.clockwise", tip: L("Actualizar instancias"), target: self, action: #selector(refresh))
 
-        let cap1 = smallCaption("Cuenta"), cap2 = smallCaption("Región")
+        let cap1 = smallCaption(L("Cuenta")), cap2 = smallCaption(L("Región"))
         let row1 = NSStackView(views: [accountPopup, more, add]); row1.spacing = 4
-        let logsBtn = IconButton(symbol: "doc.text.magnifyingglass", tip: "Ver logs de CloudWatch", target: self, action: #selector(openLogsTapped))
-        let s3Btn = IconButton(symbol: "shippingbox", tip: "Explorar S3", target: self, action: #selector(openS3))
+        let logsBtn = IconButton(symbol: "doc.text.magnifyingglass", tip: L("Ver logs de CloudWatch"), target: self, action: #selector(openLogsTapped))
+        let s3Btn = IconButton(symbol: "shippingbox", tip: L("Explorar S3"), target: self, action: #selector(openS3))
         let row2 = NSStackView(views: [regionPopup, refreshBtn, logsBtn, s3Btn]); row2.spacing = 4
         accountPopup.setContentHuggingPriority(.defaultLow, for: .horizontal)
         regionPopup.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -146,8 +147,8 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
 
     /// Se llama al mostrar la pestaña. No consulta AWS por sí sola: el listado se pide con el botón de actualizar.
     func activate() {
-        if account == nil { setStatus("Agrega una cuenta de AWS con +.") }
-        else if !loadedOnce { setStatus("Pulsa ↻ para listar las instancias.") }
+        if account == nil { setStatus(L("Agrega una cuenta de AWS con +.")) }
+        else if !loadedOnce { setStatus(L("Pulsa ↻ para listar las instancias.")) }
     }
 
     func reloadAccounts() {
@@ -160,35 +161,35 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
 
     @objc private func accountChanged() {
         instances = []; table.reloadData(); loadedOnce = false; generation += 1
-        guard let a = account else { setStatus("Agrega una cuenta de AWS con +."); return }
+        guard let a = account else { setStatus(L("Agrega una cuenta de AWS con +.")); return }
         UserDefaults.standard.set(a.id.uuidString, forKey: "aws.selected")
         regionPopup.select(title: a.region)
-        setStatus("Pulsa ↻ para listar las instancias.")
+        setStatus(L("Pulsa ↻ para listar las instancias."))
     }
 
     @objc private func addAccount() { onEditAccount?(nil) }
 
     /// Abre la pestaña de logs de CloudWatch para la cuenta y la región elegidas. No llama a AWS hasta que se usa la pestaña.
     @objc private func openLogsTapped() {
-        guard let acc = account else { setStatus("Agrega una cuenta de AWS con +.", error: true); return }
+        guard let acc = account else { setStatus(L("Agrega una cuenta de AWS con +."), error: true); return }
         let picked = regionPopup.titleOfSelected
-        let region = (picked == nil || picked == "Todas las regiones") ? acc.region : picked!
+        let region = (picked == nil || picked == allRegions) ? acc.region : picked!
         let store = self.store
         AppState.shared.openLogs(account: acc, region: region) { try store.credentials(acc) }
     }
     /// Abre el explorador de S3 de la cuenta elegida. Las credenciales se leen del Keychain solo cuando la pestaña llama a AWS.
     @objc func openS3() {
-        guard let acc = account else { setStatus("Agrega una cuenta de AWS con +.", error: true); return }
+        guard let acc = account else { setStatus(L("Agrega una cuenta de AWS con +."), error: true); return }
         let store = self.store
         AppState.shared.openS3(account: acc) { try store.credentials(acc) }
     }
     @objc private func showMore(_ b: NSButton) {
         let m = NSMenu()
         if account != nil {
-            m.addItem(withTitle: "Editar cuenta…", action: #selector(editAccount), keyEquivalent: "").target = self
-            m.addItem(withTitle: "Eliminar cuenta", action: #selector(removeAccount), keyEquivalent: "").target = self
+            m.addItem(withTitle: L("Editar cuenta…"), action: #selector(editAccount), keyEquivalent: "").target = self
+            m.addItem(withTitle: L("Eliminar cuenta"), action: #selector(removeAccount), keyEquivalent: "").target = self
         } else {
-            m.addItem(withTitle: "Agregar cuenta…", action: #selector(addAccount), keyEquivalent: "").target = self
+            m.addItem(withTitle: L("Agregar cuenta…"), action: #selector(addAccount), keyEquivalent: "").target = self
         }
         m.popUp(positioning: nil, at: NSPoint(x: 0, y: b.bounds.height), in: b)
     }
@@ -196,9 +197,9 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
     @objc private func removeAccount() {
         guard let a = account else { return }
         let alert = NSAlert()
-        alert.messageText = "¿Eliminar la cuenta “\(a.name.isEmpty ? a.accessKeyId : a.name)”?"
-        alert.informativeText = "Se borra también la clave secreta guardada en el Keychain."
-        alert.addButton(withTitle: "Eliminar"); alert.addButton(withTitle: "Cancelar")
+        alert.messageText = L("¿Eliminar la cuenta “%@”?", a.name.isEmpty ? a.accessKeyId : a.name)
+        alert.informativeText = L("Se borra también la clave secreta guardada en el Keychain.")
+        alert.addButton(withTitle: L("Eliminar")); alert.addButton(withTitle: L("Cancelar"))
         if alert.runModal() == .alertFirstButtonReturn { store.remove(a); reloadAccounts() }
     }
 
@@ -211,12 +212,12 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
     }
 
     @objc func refresh() {
-        guard let acc = account else { setStatus("Agrega una cuenta de AWS con +."); return }
+        guard let acc = account else { setStatus(L("Agrega una cuenta de AWS con +.")); return }
         let regionTitle = regionPopup.titleOfSelected ?? acc.region
         let chosen = Settings.shared.awsRegions.filter { AWSClient.regions.contains($0) }
-        let regions = regionTitle == "Todas las regiones" ? (chosen.isEmpty ? AWSClient.regions : chosen) : [regionTitle]
+        let regions = regionTitle == allRegions ? (chosen.isEmpty ? AWSClient.regions : chosen) : [regionTitle]
         generation += 1; let gen = generation
-        setStatus("Cargando instancias…")
+        setStatus(L("Cargando instancias…"))
         let store = self.store
         Task.detached {
             do {
@@ -232,7 +233,7 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
                     if found.isEmpty, let e = errors.first, errors.count == regions.count {
                         self.setStatus(e, error: true)
                     } else {
-                        self.setStatus("\(found.count) instancia\(found.count == 1 ? "" : "s")")
+                        self.setStatus(found.count == 1 ? L("1 instancia") : L("%d instancias", found.count))
                     }
                 }
             } catch {
@@ -281,7 +282,7 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
         let name = NSTextField(labelWithString: i.name)
         name.font = .systemFont(ofSize: 12, weight: .medium); name.lineBreakMode = .byTruncatingTail
         let nameRow = NSStackView(views: [name] + (account?.env.map { [EnvTag($0)] } ?? [])); nameRow.spacing = 6
-        let ip = i.publicIP.isEmpty ? (i.privateIP.isEmpty ? i.state : i.privateIP + " (privada)") : i.publicIP
+        let ip = i.publicIP.isEmpty ? (i.privateIP.isEmpty ? i.state : L("%@ (privada)", i.privateIP)) : i.publicIP
         let sub = NSTextField(labelWithString: "\(i.type) · \(ip)")
         sub.font = .systemFont(ofSize: 10); sub.textColor = .secondaryLabelColor; sub.lineBreakMode = .byTruncatingTail
         name.lineBreakMode = .byTruncatingTail; sub.lineBreakMode = .byTruncatingTail
@@ -302,10 +303,10 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         guard table.clickedRow >= 0 else { return }
-        menu.addItem(withTitle: "Conectar", action: #selector(connectClicked), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "Transferir archivos…", action: #selector(filesClicked), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "Copiar IP pública", action: #selector(copyIP), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "Copiar ID de instancia", action: #selector(copyID), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L("Conectar"), action: #selector(connectClicked), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L("Transferir archivos…"), action: #selector(filesClicked), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L("Copiar IP pública"), action: #selector(copyIP), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L("Copiar ID de instancia"), action: #selector(copyID), keyEquivalent: "").target = self
     }
     @objc private func copyIP() {
         let r = table.clickedRow; guard r >= 0 else { return }
@@ -325,10 +326,10 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
     func openFiles(_ i: EC2Instance) {
         guard let acc = account else { return }
         guard i.state == "running" else {
-            showAlert("La instancia no está en ejecución", "Estado actual: \(i.state).", window: window); return
+            showAlert(L("La instancia no está en ejecución"), L("Estado actual: %@.", i.state), window: window); return
         }
         guard !(i.publicDNS.isEmpty && i.publicIP.isEmpty) else {
-            showAlert("Instancia sin IP pública", "La transferencia de archivos usa SSH y necesita una IP o DNS público.", window: window); return
+            showAlert(L("Instancia sin IP pública"), L("La transferencia de archivos usa SSH y necesita una IP o DNS público."), window: window); return
         }
         guard let user = askUser(for: i) else { return }
         let store = self.store
@@ -346,10 +347,10 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
         combo.addItems(withObjectValues: ["ec2-user", "ubuntu", "admin", "root", "centos", "fedora", "bitnami"])
         combo.stringValue = UserDefaults.standard.string(forKey: "aws.lastUser") ?? Settings.shared.awsUser
         let a = NSAlert()
-        a.messageText = "Usuario para \(i.name)"
-        a.informativeText = "Usuario del sistema de la instancia: ec2-user (Amazon Linux), ubuntu (Ubuntu), admin (Debian)…"
+        a.messageText = L("Usuario para %@", i.name)
+        a.informativeText = L("Usuario del sistema de la instancia: ec2-user (Amazon Linux), ubuntu (Ubuntu), admin (Debian)…")
         a.accessoryView = combo
-        a.addButton(withTitle: "Conectar"); a.addButton(withTitle: "Cancelar")
+        a.addButton(withTitle: L("Conectar")); a.addButton(withTitle: L("Cancelar"))
         guard a.runModal() == .alertFirstButtonReturn else { return nil }
         let user = combo.stringValue.trimmingCharacters(in: .whitespaces)
         guard !user.isEmpty else { return nil }
@@ -368,13 +369,13 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
     func connect(_ i: EC2Instance) {
         guard let acc = account else { return }
         guard i.state == "running" else {
-            showAlert("La instancia no está en ejecución", "Estado actual: \(i.state).", window: window); return
+            showAlert(L("La instancia no está en ejecución"), L("Estado actual: %@.", i.state), window: window); return
         }
         let store = self.store
         if !(i.publicDNS.isEmpty && i.publicIP.isEmpty) {
             // Instance Connect: llave temporal + SSH normal
             guard let user = askUser(for: i) else { return }
-            setStatus("Conectando a \(i.name)…")
+            setStatus(L("Conectando a %@…", i.name))
             Task.detached {
                 do {
                     let creds = try store.credentials(acc)
@@ -386,21 +387,21 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
                         tab.env = acc.env
                         tab.fileTarget = { try await SSHTargets.aws(i, user: user, store: store, account: acc) }
                         AppState.shared.add(tab)
-                        self.setStatus("\(self.instances.count) instancias")
+                        self.setStatus(L("%d instancias", self.instances.count))
                     }
                 } catch {
                     await MainActor.run {
                         self.setStatus("")
                         UserDefaults.standard.removeObject(forKey: "aws.user.\(i.id)")
-                        showAlert("No se pudo conectar a \(i.name)", error.localizedDescription, window: self.window)
+                        showAlert(L("No se pudo conectar a %@", i.name), error.localizedDescription, window: self.window)
                     }
                 }
             }
         } else {
             // Sin IP pública: SSM Session Manager
             guard let cli = awsCLI(), ssmPlugin() else {
-                showAlert("Instancia sin IP pública",
-                          "Para conectarte necesitas el AWS CLI y el plugin session-manager-plugin instalados, y el agente SSM en la instancia.",
+                showAlert(L("Instancia sin IP pública"),
+                          L("Para conectarte necesitas el AWS CLI y el plugin session-manager-plugin instalados, y el agente SSM en la instancia."),
                           window: window)
                 return
             }
@@ -409,7 +410,7 @@ final class AWSPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
                     let creds = try store.credentials(acc)
                     await MainActor.run { let tab = TerminalTab.awsSSM(i, creds: creds, awsPath: cli); tab.env = acc.env; AppState.shared.add(tab) }
                 } catch {
-                    await MainActor.run { showAlert("No se pudo conectar a \(i.name)", error.localizedDescription, window: self.window) }
+                    await MainActor.run { showAlert(L("No se pudo conectar a %@", i.name), error.localizedDescription, window: self.window) }
                 }
             }
         }
@@ -447,29 +448,29 @@ final class AWSAccountEditor: NSObject {
         NSLayoutConstraint.activate([
             badge.widthAnchor.constraint(equalToConstant: 40), badge.heightAnchor.constraint(equalToConstant: 40),
             sym.centerXAnchor.constraint(equalTo: badge.centerXAnchor), sym.centerYAnchor.constraint(equalTo: badge.centerYAnchor)])
-        let title = NSTextField(labelWithString: isNew ? "Nueva cuenta de AWS" : "Editar cuenta de AWS")
+        let title = NSTextField(labelWithString: isNew ? L("Nueva cuenta de AWS") : L("Editar cuenta de AWS"))
         title.font = .systemFont(ofSize: 17, weight: .semibold); title.textColor = .white
-        let sub = NSTextField(labelWithString: "Credenciales IAM (access key)")
+        let sub = NSTextField(labelWithString: L("Credenciales IAM (access key)"))
         sub.font = .systemFont(ofSize: 12); sub.textColor = .secondaryLabelColor
         let titles = NSStackView(views: [title, sub]); titles.orientation = .vertical; titles.alignment = .leading; titles.spacing = 1
         let header = NSStackView(views: [badge, titles]); header.spacing = 12
 
-        let nameF = StyledField("Nombre", field: name, symbol: "tag", placeholder: "Producción")
+        let nameF = StyledField(L("Nombre"), field: name, symbol: "tag", placeholder: L("Producción"))
         let akidF = StyledField("AWS_ACCESS_KEY_ID", field: akid, symbol: "person.badge.key", placeholder: "AKIA…")
         secretF = StyledField("AWS_SECRET_ACCESS_KEY", field: secret, symbol: "lock",
-                                  placeholder: isNew ? "••••••••••••••••" : "Sin cambios", revealable: true)
+                                  placeholder: isNew ? "••••••••••••••••" : L("Sin cambios"), revealable: true)
         if !isNew { let id = self.account.id; secretF.loadSecret = { Keychain.read(id).secret } }
-        let regionF = StyledField("Región por defecto", field: region, symbol: "globe", placeholder: "sa-east-1")
+        let regionF = StyledField(L("Región por defecto"), field: region, symbol: "globe", placeholder: "sa-east-1")
         envPicker = EnvPicker(selected: self.account.env)
 
         let lock = NSImageView(image: NSImage(systemSymbolName: "lock.shield", accessibilityDescription: nil)!)
         lock.symbolConfiguration = .init(pointSize: 11, weight: .regular); lock.contentTintColor = .tertiaryLabelColor
-        let note = NSTextField(wrappingLabelWithString: "La clave secreta se guarda en el Keychain de macOS. Permisos IAM: ec2:DescribeInstances y ec2-instance-connect:SendSSHPublicKey.")
+        let note = NSTextField(wrappingLabelWithString: L("La clave secreta se guarda en el Keychain de macOS. Permisos IAM: ec2:DescribeInstances y ec2-instance-connect:SendSSHPublicKey."))
         note.font = .systemFont(ofSize: 11); note.textColor = .tertiaryLabelColor
         let noteRow = NSStackView(views: [lock, note]); noteRow.spacing = 5; noteRow.alignment = .top
 
-        let cancel = PillButton("Cancelar", primary: false, target: self, action: #selector(cancel)); cancel.keyEquivalent = "\u{1b}"
-        let save = PillButton("Guardar", primary: true, target: self, action: #selector(save)); save.keyEquivalent = "\r"
+        let cancel = PillButton(L("Cancelar"), primary: false, target: self, action: #selector(cancel)); cancel.keyEquivalent = "\u{1b}"
+        let save = PillButton(L("Guardar"), primary: true, target: self, action: #selector(save)); save.keyEquivalent = "\r"
         let buttons = NSStackView(views: [NSView(), cancel, save]); buttons.spacing = 8
 
         let form = NSStackView()

@@ -158,7 +158,7 @@ final class S3Client {
 
     private func send(_ req: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let (data, resp) = try await AWSClient.transport(req)
-        guard let http = resp as? HTTPURLResponse else { throw AWSError(message: "Respuesta no válida de S3.") }
+        guard let http = resp as? HTTPURLResponse else { throw AWSError(message: L("Respuesta no válida de S3.")) }
         guard (200..<300).contains(http.statusCode) else { throw AWSError(message: Self.message(data, status: http.statusCode)) }
         return (data, http)
     }
@@ -166,10 +166,10 @@ final class S3Client {
     static func message(_ data: Data, status: Int) -> String {
         let p = S3XMLParser()
         let xp = XMLParser(data: data); xp.delegate = p; xp.parse()
-        let msg = p.errorMessage ?? "Error HTTP \(status)"
+        let msg = p.errorMessage ?? L("Error HTTP %d", status)
         let full = msg + (p.errorCode.map { " (\($0))" } ?? "")
         if p.errorCode == "AccessDenied" || status == 403 {
-            return full + "\n\nPermisos IAM necesarios: s3:ListAllMyBuckets (listar buckets), s3:ListBucket, s3:GetObject, s3:PutObject y s3:DeleteObject."
+            return full + "\n\n" + L("Permisos IAM necesarios: s3:ListAllMyBuckets (listar buckets), s3:ListBucket, s3:GetObject, s3:PutObject y s3:DeleteObject.")
         }
         return full
     }
@@ -190,8 +190,8 @@ final class S3Client {
         var req = URLRequest(url: URL(string: "\(ep.scheme)://\(ep.host)/\(S3Signer.encode(bucket))")!)
         req.httpMethod = "HEAD"; req.timeoutInterval = 20
         let (_, resp) = try await AWSClient.transport(req)
-        guard let http = resp as? HTTPURLResponse else { throw AWSError(message: "Respuesta no válida de S3.") }
-        if http.statusCode == 404 { throw AWSError(message: "El bucket “\(bucket)” no existe (NoSuchBucket).") }
+        guard let http = resp as? HTTPURLResponse else { throw AWSError(message: L("Respuesta no válida de S3.")) }
+        if http.statusCode == 404 { throw AWSError(message: L("El bucket “%@” no existe (NoSuchBucket).", bucket)) }
         let region = http.value(forHTTPHeaderField: "x-amz-bucket-region") ?? defaultRegion
         storeRegion(bucket, region)
         return region
@@ -288,7 +288,7 @@ final class S3Client {
     func upload(file: URL, bucket: String, key: String, progress: @escaping (Int64) -> Void) async throws {
         let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
         guard size <= Self.maxSingleUpload else {
-            throw AWSError(message: "“\(file.lastPathComponent)” supera los 5 GB, el máximo de una subida simple a S3.")
+            throw AWSError(message: L("“%@” supera los 5 GB, el máximo de una subida simple a S3.", file.lastPathComponent))
         }
         var req = try await request("PUT", bucket: bucket, key: key, payloadHash: S3Signer.unsignedPayload)
         if let type = UTType(filenameExtension: file.pathExtension)?.preferredMIMEType { req.setValue(type, forHTTPHeaderField: "Content-Type") }

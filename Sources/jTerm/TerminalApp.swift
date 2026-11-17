@@ -200,11 +200,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let tunnels = TunnelManager.shared.activeCount
         guard Settings.shared.confirmQuit, !active.isEmpty || tunnels > 0 else { return .terminateNow }
         let a = NSAlert()
-        let parts = [active.isEmpty ? nil : (active.count == 1 ? "1 conexión activa" : "\(active.count) conexiones activas"),
-                     tunnels == 0 ? nil : (tunnels == 1 ? "1 túnel activo" : "\(tunnels) túneles activos")].compactMap { $0 }
-        a.messageText = "Hay " + parts.joined(separator: " y ")
-        a.informativeText = "Si sales de jTerm se cerrarán."
-        a.addButton(withTitle: "Salir"); a.addButton(withTitle: "Cancelar")
+        let parts = [active.isEmpty ? nil : (active.count == 1 ? L("1 conexión activa") : L("%d conexiones activas", active.count)),
+                     tunnels == 0 ? nil : (tunnels == 1 ? L("1 túnel activo") : L("%d túneles activos", tunnels))].compactMap { $0 }
+        a.messageText = L("Hay ") + parts.joined(separator: L(" y "))
+        a.informativeText = L("Si sales de jTerm se cerrarán.")
+        a.addButton(withTitle: L("Salir")); a.addButton(withTitle: L("Cancelar"))
         return a.runModal() == .alertFirstButtonReturn ? .terminateNow : .terminateCancel
     }
 
@@ -226,70 +226,70 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             return m
         }
         let app = submenu("jTerm")
-        add(app, "Acerca de jTerm", #selector(showAbout), "", target: self)
+        add(app, L("Acerca de jTerm"), #selector(showAbout), "", target: self)
         app.items.last?.image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)
-        add(app, "Buscar actualizaciones…", #selector(checkUpdates), "", target: self)
+        add(app, L("Buscar actualizaciones…"), #selector(checkUpdates), "", target: self)
         app.items.last?.image = NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: nil)
         app.addItem(.separator())
-        add(app, "Ajustes…", #selector(openSettings), ",", target: self)
+        add(app, L("Ajustes…"), #selector(openSettings), ",", target: self)
         app.addItem(.separator())
-        add(app, "Salir de jTerm", #selector(NSApplication.terminate(_:)), "q")
+        add(app, L("Salir de jTerm"), #selector(NSApplication.terminate(_:)), "q")
 
-        let file = submenu("Archivo")
-        add(file, "Nueva pestaña", #selector(newTab), "t", target: self)
-        add(file, "Cerrar panel o pestaña", #selector(closePane), "w", target: self)
-        add(file, "Cerrar pestaña entera", #selector(closeTab), "w", [.command, .option], target: self)
+        let file = submenu(L("Archivo"))
+        add(file, L("Nueva pestaña"), #selector(newTab), "t", target: self)
+        add(file, L("Cerrar panel o pestaña"), #selector(closePane), "w", target: self)
+        add(file, L("Cerrar pestaña entera"), #selector(closeTab), "w", [.command, .option], target: self)
 
-        let edit = submenu("Edición")
-        add(edit, "Copiar", #selector(NSText.copy(_:)), "c")
-        add(edit, "Pegar", #selector(NSText.paste(_:)), "v")
-        add(edit, "Seleccionar todo", #selector(NSText.selectAll(_:)), "a")
+        let edit = submenu(L("Edición"))
+        add(edit, L("Copiar"), #selector(NSText.copy(_:)), "c")
+        add(edit, L("Pegar"), #selector(NSText.paste(_:)), "v")
+        add(edit, L("Seleccionar todo"), #selector(NSText.selectAll(_:)), "a")
         edit.addItem(.separator())
         // Buscar en el historial del terminal: la barra de búsqueda es la del propio terminal (la reciben por la cadena de respuesta).
-        for (title, key, mods, tag) in [("Buscar…", "f", NSEvent.ModifierFlags.command, NSFindPanelAction.showFindPanel),
-                                        ("Buscar siguiente", "g", .command, .next),
-                                        ("Buscar anterior", "g", [.command, .shift], .previous),
-                                        ("Usar la selección para buscar", "e", .command, .setFindString)] {
+        for (title, key, mods, tag) in [(L("Buscar…"), "f", NSEvent.ModifierFlags.command, NSFindPanelAction.showFindPanel),
+                                        (L("Buscar siguiente"), "g", .command, .next),
+                                        (L("Buscar anterior"), "g", [.command, .shift], .previous),
+                                        (L("Usar la selección para buscar"), "e", .command, .setFindString)] {
             let it = edit.addItem(withTitle: title, action: NSSelectorFromString("performFindPanelAction:"), keyEquivalent: key)
             it.keyEquivalentModifierMask = mods; it.tag = Int(tag.rawValue)
         }
 
         let term = submenu("Terminal")
-        add(term, "Prompt anterior", #selector(prevPrompt), String(UnicodeScalar(NSUpArrowFunctionKey)!), .command, target: self)
-        add(term, "Prompt siguiente", #selector(nextPrompt), String(UnicodeScalar(NSDownArrowFunctionKey)!), .command, target: self)
+        add(term, L("Prompt anterior"), #selector(prevPrompt), String(UnicodeScalar(NSUpArrowFunctionKey)!), .command, target: self)
+        add(term, L("Prompt siguiente"), #selector(nextPrompt), String(UnicodeScalar(NSDownArrowFunctionKey)!), .command, target: self)
         term.addItem(.separator())
-        add(term, "Grabar sesión", #selector(toggleRecording), "r", [.command, .option], target: self)
-        add(term, "Mostrar grabaciones en Finder", #selector(revealRecordings), "", target: self)
+        add(term, L("Grabar sesión"), #selector(toggleRecording), "r", [.command, .option], target: self)
+        add(term, L("Mostrar grabaciones en Finder"), #selector(revealRecordings), "", target: self)
 
-        let panes = submenu("Paneles")
+        let panes = submenu(L("Paneles"))
         let arrow = { (c: Int) in String(UnicodeScalar(c)!) }
-        add(panes, "Dividir a la derecha", #selector(splitRight), "d", target: self)
-        add(panes, "Dividir hacia abajo", #selector(splitDown), "d", [.command, .shift], target: self)
-        add(panes, "Dividir a la derecha con terminal local", #selector(splitRightLocal), "", target: self)
-        add(panes, "Dividir hacia abajo con terminal local", #selector(splitDownLocal), "", target: self)
+        add(panes, L("Dividir a la derecha"), #selector(splitRight), "d", target: self)
+        add(panes, L("Dividir hacia abajo"), #selector(splitDown), "d", [.command, .shift], target: self)
+        add(panes, L("Dividir a la derecha con terminal local"), #selector(splitRightLocal), "", target: self)
+        add(panes, L("Dividir hacia abajo con terminal local"), #selector(splitDownLocal), "", target: self)
         panes.addItem(.separator())
-        add(panes, "Ir al panel de la izquierda", #selector(focusLeft), arrow(NSLeftArrowFunctionKey), [.command, .option], target: self)
-        add(panes, "Ir al panel de la derecha", #selector(focusRight), arrow(NSRightArrowFunctionKey), [.command, .option], target: self)
-        add(panes, "Ir al panel de arriba", #selector(focusUp), arrow(NSUpArrowFunctionKey), [.command, .option], target: self)
-        add(panes, "Ir al panel de abajo", #selector(focusDown), arrow(NSDownArrowFunctionKey), [.command, .option], target: self)
-        add(panes, "Panel siguiente", #selector(nextPane), "]", target: self)
-        add(panes, "Panel anterior", #selector(prevPane), "[", target: self)
+        add(panes, L("Ir al panel de la izquierda"), #selector(focusLeft), arrow(NSLeftArrowFunctionKey), [.command, .option], target: self)
+        add(panes, L("Ir al panel de la derecha"), #selector(focusRight), arrow(NSRightArrowFunctionKey), [.command, .option], target: self)
+        add(panes, L("Ir al panel de arriba"), #selector(focusUp), arrow(NSUpArrowFunctionKey), [.command, .option], target: self)
+        add(panes, L("Ir al panel de abajo"), #selector(focusDown), arrow(NSDownArrowFunctionKey), [.command, .option], target: self)
+        add(panes, L("Panel siguiente"), #selector(nextPane), "]", target: self)
+        add(panes, L("Panel anterior"), #selector(prevPane), "[", target: self)
         panes.addItem(.separator())
-        add(panes, "Maximizar panel", #selector(toggleZoomPane), "\r", [.command, .shift], target: self)
-        add(panes, "Igualar tamaños", #selector(equalizePanes), "=", [.command, .control], target: self)
-        add(panes, "Escribir en todos los paneles", #selector(toggleBroadcast), "i", [.command, .option], target: self)
+        add(panes, L("Maximizar panel"), #selector(toggleZoomPane), "\r", [.command, .shift], target: self)
+        add(panes, L("Igualar tamaños"), #selector(equalizePanes), "=", [.command, .control], target: self)
+        add(panes, L("Escribir en todos los paneles"), #selector(toggleBroadcast), "i", [.command, .option], target: self)
 
-        let cmds = submenu("Comandos")
-        add(cmds, "Mostrar comandos guardados", #selector(showSnippets), "k", [.command, .shift], target: self)
+        let cmds = submenu(L("Comandos"))
+        add(cmds, L("Mostrar comandos guardados"), #selector(showSnippets), "k", [.command, .shift], target: self)
 
-        add(cmds, "Buscar servidor, instancia o comando…", #selector(showFinder), "k", target: self)
+        add(cmds, L("Buscar servidor, instancia o comando…"), #selector(showFinder), "k", target: self)
 
-        let tabs = submenu("Pestañas")
-        add(tabs, "Siguiente", #selector(nextTab), "]", [.command, .shift], target: self)
-        add(tabs, "Anterior", #selector(prevTab), "[", [.command, .shift], target: self)
-        add(tabs, "Mostrar/ocultar servidores", #selector(sidebarAction), "b", target: self)
+        let tabs = submenu(L("Pestañas"))
+        add(tabs, L("Siguiente"), #selector(nextTab), "]", [.command, .shift], target: self)
+        add(tabs, L("Anterior"), #selector(prevTab), "[", [.command, .shift], target: self)
+        add(tabs, L("Mostrar/ocultar servidores"), #selector(sidebarAction), "b", target: self)
         for i in 1...9 {
-            let it = tabs.addItem(withTitle: "Pestaña \(i)", action: #selector(goTab(_:)), keyEquivalent: "\(i)")
+            let it = tabs.addItem(withTitle: L("Pestaña %d", i), action: #selector(goTab(_:)), keyEquivalent: "\(i)")
             it.tag = i - 1; it.target = self
         }
         NSApp.mainMenu = main
@@ -297,7 +297,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc func showAbout() {
         let repo = (Bundle.main.object(forInfoDictionaryKey: "JTermUpdateRepo") as? String) ?? ""
         let credits = NSMutableAttributedString(
-            string: "Terminal para macOS con SSH, AWS, archivos y comandos guardados.\n",
+            string: L("Terminal para macOS con SSH, AWS, archivos y comandos guardados.\n"),
             attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.labelColor])
         if !repo.isEmpty, let url = URL(string: "https://github.com/\(repo)") {
             credits.append(NSAttributedString(string: "github.com/\(repo)",
@@ -318,7 +318,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         guard let tab = AppState.shared.activeTerminal else { return NSSound.beep() }
         if tab.isRecording { tab.stopRecording(); return }
         do { try tab.startRecording() }
-        catch { showAlert("No se pudo grabar la sesión", error.localizedDescription, window: window) }
+        catch { showAlert(L("No se pudo grabar la sesión"), error.localizedDescription, window: window) }
     }
     @objc func revealRecordings() {
         let dir = SessionRecorder.defaultDirectory
@@ -334,17 +334,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let many = (split?.panes.count ?? 0) > 1
         switch item.action {
         case #selector(toggleRecording):
-            item.title = tab?.isRecording == true ? "Detener grabación" : "Grabar sesión"
+            item.title = tab?.isRecording == true ? L("Detener grabación") : L("Grabar sesión")
             return tab != nil
         case #selector(prevPrompt), #selector(nextPrompt): return tab != nil
         case #selector(splitRight), #selector(splitDown), #selector(splitRightLocal), #selector(splitDownLocal): return split != nil
         case #selector(closePane):
-            item.title = many ? "Cerrar panel" : "Cerrar pestaña"
+            item.title = many ? L("Cerrar panel") : L("Cerrar pestaña")
             return split != nil
         case #selector(focusLeft), #selector(focusRight), #selector(focusUp), #selector(focusDown),
              #selector(nextPane), #selector(prevPane), #selector(equalizePanes): return many
         case #selector(toggleZoomPane):
-            item.title = split?.zoomed != nil ? "Restaurar tamaño del panel" : "Maximizar panel"
+            item.title = split?.zoomed != nil ? L("Restaurar tamaño del panel") : L("Maximizar panel")
             return many
         case #selector(toggleBroadcast):
             item.state = split?.broadcast == true ? .on : .off
@@ -359,7 +359,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let st = AppState.shared
         var items: [FinderItem] = []
         for t in st.tabs {
-            items.append(FinderItem(kind: .tab, title: t.title, subtitle: t.isConnected ? "Pestaña abierta · conectada" : "Pestaña abierta",
+            items.append(FinderItem(kind: .tab, title: t.title, subtitle: t.isConnected ? L("Pestaña abierta · conectada") : L("Pestaña abierta"),
                                     symbol: t.iconName, env: t.env, run: { _ in st.select(t) }))
         }
         for s in st.store.servers {
@@ -376,23 +376,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                                     run: { _ in aws.connect(i) }))
         }
         for c in SnippetStore.shared.items {
-            items.append(FinderItem(kind: .snippet, title: c.title, subtitle: c.firstLine + (c.lineCount > 1 ? "  (+\(c.lineCount - 1) líneas)" : ""),
+            items.append(FinderItem(kind: .snippet, title: c.title, subtitle: c.firstLine + (c.lineCount > 1 ? L("  (+%d líneas)", c.lineCount - 1) : ""),
                                     symbol: "chevron.left.forwardslash.chevron.right", keywords: c.command,
                                     run: { [weak self] alt in self?.insertSnippet(c, runNow: alt) }))
         }
         for t in st.tunnelStore.tunnels {
             let running = [.active, .starting].contains(TunnelManager.shared.state(of: t.id))
-            items.append(FinderItem(kind: .action, title: (running ? "Detener túnel: " : "Activar túnel: ") + t.title, subtitle: t.summary,
+            items.append(FinderItem(kind: .action, title: (running ? L("Detener túnel: ") : L("Activar túnel: ")) + t.title, subtitle: t.summary,
                                     symbol: "point.3.connected.trianglepath.dotted", keywords: "tunel túnel ssh puerto \(t.listenPort) \(t.destHost)",
                                     run: { [weak self] _ in AppState.shared.toggleTunnel(t, window: self?.window) }))
         }
         if let acc = acc {
-            items.append(FinderItem(kind: .action, title: "Explorar S3", subtitle: "Buckets de \(acc.name.isEmpty ? acc.accessKeyId : acc.name)",
+            items.append(FinderItem(kind: .action, title: L("Explorar S3"), subtitle: L("Buckets de %@", acc.name.isEmpty ? acc.accessKeyId : acc.name),
                                     symbol: "shippingbox", env: acc.env, keywords: "s3 bucket archivos", run: { _ in aws.openS3() }))
         }
-        items.append(FinderItem(kind: .action, title: "Nueva pestaña local", subtitle: "Abre un terminal en este Mac", symbol: "terminal",
+        items.append(FinderItem(kind: .action, title: L("Nueva pestaña local"), subtitle: L("Abre un terminal en este Mac"), symbol: "terminal",
                                 run: { _ in st.newLocal() }))
-        items.append(FinderItem(kind: .action, title: "Ajustes", subtitle: "Abre los ajustes de jTerm", symbol: "gearshape",
+        items.append(FinderItem(kind: .action, title: L("Ajustes"), subtitle: L("Abre los ajustes de jTerm"), symbol: "gearshape",
                                 run: { [weak self] _ in self?.openSettings() }))
         return items
     }

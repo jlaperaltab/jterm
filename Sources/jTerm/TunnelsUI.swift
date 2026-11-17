@@ -10,9 +10,9 @@ final class TunnelsPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NS
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        let title = NSTextField(labelWithString: "TÚNELES SSH")
+        let title = NSTextField(labelWithString: L("TÚNELES SSH"))
         title.font = .systemFont(ofSize: 11, weight: .semibold); title.textColor = .secondaryLabelColor
-        let add = NSButton(image: NSImage(systemSymbolName: "plus", accessibilityDescription: "Agregar túnel")!, target: self, action: #selector(addTunnel))
+        let add = NSButton(image: NSImage(systemSymbolName: "plus", accessibilityDescription: L("Agregar túnel"))!, target: self, action: #selector(addTunnel))
         add.isBordered = false; add.contentTintColor = .secondaryLabelColor
         let header = NSStackView(views: [title, NSView(), add])
         header.edgeInsets = NSEdgeInsets(top: 4, left: 12, bottom: 6, right: 12)
@@ -24,7 +24,7 @@ final class TunnelsPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NS
         let menu = NSMenu(); menu.delegate = self; table.menu = menu
         let scroll = NSScrollView(); scroll.documentView = table; scroll.drawsBackground = false; scroll.hasVerticalScroller = true
 
-        emptyLabel.stringValue = "Aún no hay túneles.\n\nUn túnel conecta un puerto de tu Mac con un servicio al que solo llega el servidor (una base de datos, un panel interno…). Guarda uno con + y actívalo con un clic."
+        emptyLabel.stringValue = L("Aún no hay túneles.\n\nUn túnel conecta un puerto de tu Mac con un servicio al que solo llega el servidor (una base de datos, un panel interno…). Guarda uno con + y actívalo con un clic.")
         emptyLabel.font = .systemFont(ofSize: 11); emptyLabel.textColor = .tertiaryLabelColor; emptyLabel.maximumNumberOfLines = 0
 
         for v in [header, scroll, emptyLabel] as [NSView] { v.translatesAutoresizingMaskIntoConstraints = false; addSubview(v) }
@@ -76,7 +76,7 @@ final class TunnelsPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NS
 
         let name = NSTextField(labelWithString: t.title)
         name.font = .systemFont(ofSize: 12, weight: .medium); name.lineBreakMode = .byTruncatingTail
-        let via = AppState.shared.store.servers.first { $0.id == t.serverId }.map { " · vía " + ($0.name.isEmpty ? $0.host : $0.name) } ?? " · sin servidor"
+        let via = AppState.shared.store.servers.first { $0.id == t.serverId }.map { L(" · vía %@", $0.name.isEmpty ? $0.host : $0.name) } ?? L(" · sin servidor")
         let sub = NSTextField(labelWithString: (t.kind == .local ? "-L  " : "-R  ") + t.summary + via)
         sub.font = .systemFont(ofSize: 10); sub.textColor = .secondaryLabelColor; sub.lineBreakMode = .byTruncatingTail
         for l in [name, sub] {
@@ -90,14 +90,14 @@ final class TunnelsPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NS
             e.preferredMaxLayoutWidth = 170
             lines.append(e)
         } else if state == .starting {
-            let s = NSTextField(labelWithString: "Conectando…"); s.font = .systemFont(ofSize: 10); s.textColor = .systemOrange
+            let s = NSTextField(labelWithString: L("Conectando…")); s.font = .systemFont(ofSize: 10); s.textColor = .systemOrange
             lines.append(s)
         }
         let texts = NSStackView(views: lines); texts.orientation = .vertical; texts.alignment = .leading; texts.spacing = 1
         texts.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .horizontal)
 
         let running = state == .active || state == .starting
-        let btn = IconButton(symbol: running ? "stop.fill" : "play.fill", tip: running ? "Detener túnel" : "Iniciar túnel", size: 26, target: self, action: #selector(toggleButton(_:)))
+        let btn = IconButton(symbol: running ? "stop.fill" : "play.fill", tip: running ? L("Detener túnel") : L("Iniciar túnel"), size: 26, target: self, action: #selector(toggleButton(_:)))
         btn.tag = row
         btn.contentTintColor = running ? .systemRed : .systemGreen
         btn.setContentHuggingPriority(.required, for: .horizontal)
@@ -115,11 +115,11 @@ final class TunnelsPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NS
         guard tunnels.indices.contains(r) else { return }
         let t = tunnels[r]
         let running = [.active, .starting].contains(TunnelManager.shared.state(of: t.id))
-        menu.addItem(withTitle: running ? "Detener" : "Iniciar", action: #selector(toggleClicked), keyEquivalent: "").target = self
-        if t.kind == .local { menu.addItem(withTitle: "Copiar dirección (localhost:\(t.listenPort))", action: #selector(copyAddress), keyEquivalent: "").target = self }
+        menu.addItem(withTitle: running ? L("Detener") : L("Iniciar"), action: #selector(toggleClicked), keyEquivalent: "").target = self
+        if t.kind == .local { menu.addItem(withTitle: L("Copiar dirección (localhost:%d)", t.listenPort), action: #selector(copyAddress), keyEquivalent: "").target = self }
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Editar…", action: #selector(editClicked), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "Eliminar", action: #selector(removeClicked), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L("Editar…"), action: #selector(editClicked), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L("Eliminar"), action: #selector(removeClicked), keyEquivalent: "").target = self
     }
     @objc private func copyAddress() {
         let r = table.clickedRow; guard tunnels.indices.contains(r) else { return }
@@ -129,8 +129,8 @@ final class TunnelsPanel: NSView, NSTableViewDataSource, NSTableViewDelegate, NS
     @objc private func removeClicked() {
         let r = table.clickedRow; guard tunnels.indices.contains(r) else { return }
         let t = tunnels[r]
-        let a = NSAlert(); a.messageText = "¿Eliminar el túnel “\(t.title)”?"; a.informativeText = "Si está activo, se detiene."
-        a.addButton(withTitle: "Eliminar"); a.addButton(withTitle: "Cancelar")
+        let a = NSAlert(); a.messageText = L("¿Eliminar el túnel “%@”?", t.title); a.informativeText = L("Si está activo, se detiene.")
+        a.addButton(withTitle: L("Eliminar")); a.addButton(withTitle: L("Cancelar"))
         guard a.runModal() == .alertFirstButtonReturn else { return }
         TunnelManager.shared.stop(t.id)
         AppState.shared.tunnelStore.remove(t)
@@ -176,32 +176,32 @@ final class TunnelEditor: NSObject {
         NSLayoutConstraint.activate([
             badge.widthAnchor.constraint(equalToConstant: 40), badge.heightAnchor.constraint(equalToConstant: 40),
             sym.centerXAnchor.constraint(equalTo: badge.centerXAnchor), sym.centerYAnchor.constraint(equalTo: badge.centerYAnchor)])
-        let title = NSTextField(labelWithString: isNew ? "Nuevo túnel" : "Editar túnel")
+        let title = NSTextField(labelWithString: isNew ? L("Nuevo túnel") : L("Editar túnel"))
         title.font = .systemFont(ofSize: 17, weight: .semibold); title.textColor = .white
-        let sub = NSTextField(labelWithString: "Reenvío de puertos por SSH")
+        let sub = NSTextField(labelWithString: L("Reenvío de puertos por SSH"))
         sub.font = .systemFont(ofSize: 12); sub.textColor = .secondaryLabelColor
         let titles = NSStackView(views: [title, sub]); titles.orientation = .vertical; titles.alignment = .leading; titles.spacing = 1
         let header = NSStackView(views: [badge, titles]); header.spacing = 12
 
-        let nameF = StyledField("Nombre", field: name, symbol: "tag", placeholder: "Base de datos de producción")
+        let nameF = StyledField(L("Nombre"), field: name, symbol: "tag", placeholder: L("Base de datos de producción"))
         kind.segmentStyle = .rounded
         kind.selectedSegment = Tunnel.Kind.allCases.firstIndex(of: self.tunnel.kind) ?? 0
         kind.target = self; kind.action = #selector(kindChanged)
-        let kindCaption = NSTextField(labelWithString: "TIPO")
+        let kindCaption = NSTextField(labelWithString: L("TIPO"))
         kindCaption.font = .systemFont(ofSize: 10, weight: .semibold); kindCaption.textColor = .tertiaryLabelColor
         let kindBox = NSStackView(views: [kindCaption, kind]); kindBox.orientation = .vertical; kindBox.alignment = .leading; kindBox.spacing = 5
         kind.widthAnchor.constraint(equalTo: kindBox.widthAnchor).isActive = true
 
-        listenF = StyledField("Puerto en este Mac", field: listen, symbol: "number", placeholder: "5433")
-        hostF = StyledField("Destino", field: host, symbol: "network", placeholder: "db.interna")
-        let portF = StyledField("Puerto destino", field: port, placeholder: "5432")
+        listenF = StyledField(L("Puerto en este Mac"), field: listen, symbol: "number", placeholder: "5433")
+        hostF = StyledField(L("Destino"), field: host, symbol: "network", placeholder: "db.interna")
+        let portF = StyledField(L("Puerto destino"), field: port, placeholder: "5432")
         portF.widthAnchor.constraint(equalToConstant: 110).isActive = true
         let destRow = NSStackView(views: [hostF, portF]); destRow.spacing = 10; destRow.alignment = .top; destRow.distribution = .fill
 
-        let srvCaption = NSTextField(labelWithString: "SERVIDOR POR EL QUE PASA")
+        let srvCaption = NSTextField(labelWithString: L("SERVIDOR POR EL QUE PASA"))
         srvCaption.font = .systemFont(ofSize: 10, weight: .semibold); srvCaption.textColor = .tertiaryLabelColor
         serverDropdown.items = servers.map { $0.name.isEmpty ? $0.host : $0.name }
-        serverDropdown.placeholder = "Primero guarda un servidor"
+        serverDropdown.placeholder = L("Primero guarda un servidor")
         serverDropdown.selectedIndex = servers.firstIndex { $0.id == self.tunnel.serverId } ?? (servers.isEmpty ? -1 : 0)
         let srvBox = NSStackView(views: [srvCaption, serverDropdown]); srvBox.orientation = .vertical; srvBox.alignment = .leading; srvBox.spacing = 5
         serverDropdown.widthAnchor.constraint(equalTo: srvBox.widthAnchor).isActive = true
@@ -211,8 +211,8 @@ final class TunnelEditor: NSObject {
         lock.symbolConfiguration = .init(pointSize: 11, weight: .regular); lock.contentTintColor = .tertiaryLabelColor
         let hintRow = NSStackView(views: [lock, hint]); hintRow.spacing = 5; hintRow.alignment = .top
 
-        let cancel = PillButton("Cancelar", primary: false, target: self, action: #selector(cancelTapped)); cancel.keyEquivalent = "\u{1b}"
-        let save = PillButton("Guardar", primary: true, target: self, action: #selector(saveTapped)); save.keyEquivalent = "\r"
+        let cancel = PillButton(L("Cancelar"), primary: false, target: self, action: #selector(cancelTapped)); cancel.keyEquivalent = "\u{1b}"
+        let save = PillButton(L("Guardar"), primary: true, target: self, action: #selector(saveTapped)); save.keyEquivalent = "\r"
         let buttons = NSStackView(views: [NSView(), cancel, save]); buttons.spacing = 8
 
         form.orientation = .vertical; form.alignment = .leading; form.spacing = 14
@@ -242,11 +242,11 @@ final class TunnelEditor: NSObject {
 
     @objc private func kindChanged() {
         let local = selectedKind == .local
-        (listenF.arrangedSubviews.first as? NSTextField)?.stringValue = (local ? "Puerto en este Mac" : "Puerto en el servidor").uppercased()
-        (hostF.arrangedSubviews.first as? NSTextField)?.stringValue = (local ? "Destino (visto desde el servidor)" : "Destino (en este Mac)").uppercased()
+        (listenF.arrangedSubviews.first as? NSTextField)?.stringValue = (local ? L("Puerto en este Mac") : L("Puerto en el servidor")).uppercased()
+        (hostF.arrangedSubviews.first as? NSTextField)?.stringValue = (local ? L("Destino (visto desde el servidor)") : L("Destino (en este Mac)")).uppercased()
         hint.stringValue = local
-            ? "Abre un puerto en este Mac (solo accesible desde él) y lo lleva, a través del servidor, al destino. Ejemplo: puerto 5433 → db.interna:5432 y luego conectas tu cliente a localhost:5433."
-            : "Abre un puerto en el servidor y lo lleva a un destino de este Mac. Sirve para que el servidor llegue a algo tuyo, como una app en localhost:3000."
+            ? L("Abre un puerto en este Mac (solo accesible desde él) y lo lleva, a través del servidor, al destino. Ejemplo: puerto 5433 → db.interna:5432 y luego conectas tu cliente a localhost:5433.")
+            : L("Abre un puerto en el servidor y lo lleva a un destino de este Mac. Sirve para que el servidor llegue a algo tuyo, como una app en localhost:3000.")
         form.layoutSubtreeIfNeeded()
         panel.setContentSize(NSSize(width: 460, height: form.fittingSize.height))
     }
@@ -260,7 +260,7 @@ final class TunnelEditor: NSObject {
         t.destHost = host.stringValue.trimmingCharacters(in: .whitespaces)
         t.destPort = Int(port.stringValue.trimmingCharacters(in: .whitespaces)) ?? 0
         t.serverId = servers.indices.contains(serverDropdown.selectedIndex) ? servers[serverDropdown.selectedIndex].id : nil
-        if let error = t.validationError() { NSSound.beep(); return showAlert("Revisa el túnel", error, window: panel) }
+        if let error = t.validationError() { NSSound.beep(); return showAlert(L("Revisa el túnel"), error, window: panel) }
         if t != tunnel, [.active, .starting].contains(TunnelManager.shared.state(of: t.id)) { TunnelManager.shared.stop(t.id) }   // los cambios se aplican al reiniciarlo
         AppState.shared.tunnelStore.upsert(t)
         finish()

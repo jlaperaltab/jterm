@@ -45,9 +45,9 @@ final class LogGroupPicker: NSObject, NSPopoverDelegate, NSTableViewDataSource, 
         root.layer?.backgroundColor = NSColor(srgbRed: 0.105, green: 0.115, blue: 0.14, alpha: 1).cgColor
         let vc = NSViewController(); vc.view = root; popover.contentViewController = vc
 
-        search = CompactField(value: "", placeholder: "Buscar grupo de logs…", width: 330)
+        search = CompactField(value: "", placeholder: L("Buscar grupo de logs…"), width: 330)
         search.field.delegate = self
-        let reload = IconButton(symbol: "arrow.clockwise", tip: "Recargar la lista", size: 30, target: self, action: #selector(reloadTapped))
+        let reload = IconButton(symbol: "arrow.clockwise", tip: L("Recargar la lista"), size: 30, target: self, action: #selector(reloadTapped))
         let top = NSStackView(views: [search, reload]); top.spacing = 8
 
         let col = NSTableColumn(identifier: .init("g")); col.resizingMask = .autoresizingMask
@@ -92,7 +92,7 @@ final class LogGroupPicker: NSObject, NSPopoverDelegate, NSTableViewDataSource, 
         filtered = q.isEmpty ? all : all.filter { $0.name.range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
         table.reloadData()
         note.isHidden = !filtered.isEmpty
-        note.stringValue = loading ? "Cargando grupos de logs…" : (all.isEmpty ? "No hay grupos de logs en esta región." : "Ningún grupo coincide con la búsqueda.")
+        note.stringValue = loading ? L("Cargando grupos de logs…") : (all.isEmpty ? L("No hay grupos de logs en esta región.") : L("Ningún grupo coincide con la búsqueda."))
     }
 
     func controlTextDidChange(_ n: Notification) { applyFilter() }
@@ -109,7 +109,7 @@ final class LogGroupPicker: NSObject, NSPopoverDelegate, NSTableViewDataSource, 
         name.font = .monospacedSystemFont(ofSize: 12, weight: .regular); name.textColor = .white; name.lineBreakMode = .byTruncatingHead
         name.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         var parts: [String] = []
-        parts.append(g.retentionDays.map { "Retención: \($0) días" } ?? "Retención: sin límite")
+        parts.append(g.retentionDays.map { L("Retención: %d días", $0) } ?? L("Retención: sin límite"))
         parts.append(ByteCountFormatter.string(fromByteCount: g.storedBytes, countStyle: .file))
         let detail = NSTextField(labelWithString: parts.joined(separator: " · "))
         detail.font = .systemFont(ofSize: 10); detail.textColor = .secondaryLabelColor
@@ -139,7 +139,7 @@ final class LogsView: NSView {
     private let groupField = Dropdown(symbol: "text.alignleft")
     private let rangeField = Dropdown(symbol: "clock")
     private let filter = CompactField(value: "", placeholder: "ERROR  ·  ?ERROR ?WARN  ·  { $.level = \"error\" }", width: 340, mono: true)
-    private let streamPrefix = CompactField(value: "", placeholder: "Prefijo del stream (opcional)", width: 200)
+    private let streamPrefix = CompactField(value: "", placeholder: L("Prefijo del stream (opcional)"), width: 200)
     private var searchButton: PillButton!
     private var followButton: PillButton!
     private let text = NSTextView()
@@ -167,9 +167,9 @@ final class LogsView: NSView {
     private var followTimer: Timer?
     private var followBusy = false
     private var followFrom: Int64 = 0
-    private let ranges: [(String, TimeInterval)] = [("Últimos 5 minutos", 300), ("Últimos 15 minutos", 900), ("Última hora", 3600),
-                                                    ("Últimas 6 horas", 21_600), ("Últimas 24 horas", 86_400), ("Últimos 3 días", 259_200),
-                                                    ("Últimos 7 días", 604_800)]
+    private let ranges: [(String, TimeInterval)] = [(L("Últimos 5 minutos"), 300), (L("Últimos 15 minutos"), 900), (L("Última hora"), 3600),
+                                                    (L("Últimas 6 horas"), 21_600), (L("Últimas 24 horas"), 86_400), (L("Últimos 3 días"), 259_200),
+                                                    (L("Últimos 7 días"), 604_800)]
 
     /// Texto sin formato de todos los eventos (lo que se copia y se guarda, sea cual sea la vista).
     var plainText: String {
@@ -209,31 +209,31 @@ final class LogsView: NSView {
             guard let self, let r = self.regionField.titleOfSelected, r != self.region else { return }
             self.region = r; self.stopFollow(); self.groups = []; self.selectedGroup = nil; self.clearResults(); self.loadGroups()
         }
-        groupField.placeholder = "Elegir grupo de logs…"
+        groupField.placeholder = L("Elegir grupo de logs…")
         groupField.customAction = { [weak self] in self?.openPicker() }
         rangeField.items = ranges.map(\.0); rangeField.selectedIndex = 2
 
-        searchButton = PillButton("Buscar", primary: true, target: self, action: #selector(runSearch))
-        followButton = PillButton("Seguir", primary: false, target: self, action: #selector(toggleFollow))
-        let more = IconButton(symbol: "ellipsis.circle", tip: "Copiar, guardar o limpiar", size: 32, target: self, action: #selector(showMore(_:)))
+        searchButton = PillButton(L("Buscar"), primary: true, target: self, action: #selector(runSearch))
+        followButton = PillButton(L("Seguir"), primary: false, target: self, action: #selector(toggleFollow))
+        let more = IconButton(symbol: "ellipsis.circle", tip: L("Copiar, guardar o limpiar"), size: 32, target: self, action: #selector(showMore(_:)))
         filter.field.target = self; filter.field.action = #selector(runSearch)
         streamPrefix.field.target = self; streamPrefix.field.action = #selector(runSearch)
 
         regionField.widthAnchor.constraint(equalToConstant: 150).isActive = true
         rangeField.widthAnchor.constraint(equalToConstant: 190).isActive = true
-        let regionCol = labeled("REGIÓN", regionField), rangeCol = labeled("RANGO", rangeField)
-        let groupCol = labeled("GRUPO DE LOGS", groupField)
+        let regionCol = labeled(L("REGIÓN"), regionField), rangeCol = labeled(L("RANGO"), rangeField)
+        let groupCol = labeled(L("GRUPO DE LOGS"), groupField)
         groupCol.setContentHuggingPriority(.defaultLow, for: .horizontal)
         groupField.widthAnchor.constraint(greaterThanOrEqualToConstant: 240).isActive = true
         let row1 = NSStackView(views: [regionCol, groupCol, rangeCol]); row1.spacing = 12; row1.alignment = .bottom
         groupField.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let filterCol = labeled("FILTRO (sintaxis de CloudWatch)", filter), streamCol = labeled("STREAM", streamPrefix)
+        let filterCol = labeled(L("FILTRO (sintaxis de CloudWatch)"), filter), streamCol = labeled(L("STREAM"), streamPrefix)
         let spacer = NSView(); spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        modeControl = NSSegmentedControl(labels: ["Formateado", "Texto"], trackingMode: .selectOne, target: self, action: #selector(modeChanged))
+        modeControl = NSSegmentedControl(labels: [L("Formateado"), L("Texto")], trackingMode: .selectOne, target: self, action: #selector(modeChanged))
         modeControl.segmentStyle = .texturedRounded
         modeControl.selectedSegment = mode == .formatted ? 0 : 1
-        modeControl.toolTip = "Cambiar entre la vista formateada y el texto sin formato"
+        modeControl.toolTip = L("Cambiar entre la vista formateada y el texto sin formato")
         let row2 = NSStackView(views: [filterCol, streamCol, spacer, searchButton, followButton, modeControl, more]); row2.spacing = 10; row2.alignment = .bottom
         for b in [searchButton!, followButton!] { b.widthAnchor.constraint(greaterThanOrEqualToConstant: 92).isActive = true }
 
@@ -271,7 +271,7 @@ final class LogsView: NSView {
             status.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16), status.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
             status.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
         ])
-        setStatus("Elige un grupo de logs y pulsa Buscar.")
+        setStatus(L("Elige un grupo de logs y pulsa Buscar."))
         applyMode()
 
         picker.onPick = { [weak self] name in self?.selectGroup(name) }
@@ -300,7 +300,7 @@ final class LogsView: NSView {
     func loadGroups() {
         guard !groupsLoading else { return }
         groupsLoading = true
-        setStatus("Cargando grupos de logs…")
+        setStatus(L("Cargando grupos de logs…"))
         let region = self.region, creds = credentials
         picker.update(groups: groups, loading: true)
         Task.detached { [weak self] in
@@ -316,7 +316,7 @@ final class LogsView: NSView {
                     guard let self, region == self.region else { return }
                     self.groups = sorted; self.groupsLoading = false
                     self.picker.update(groups: sorted, loading: false)
-                    self.setStatus("\(sorted.count) grupos de logs en \(region). Elige uno y pulsa Buscar.")
+                    self.setStatus(L("%d grupos de logs en %@. Elige uno y pulsa Buscar.", sorted.count, region))
                     if self.selectedGroup == nil, let last = UserDefaults.standard.string(forKey: "logs.group.\(self.accountId).\(region)"),
                        sorted.contains(where: { $0.name == last }) { self.selectGroup(last) }
                 }
@@ -336,12 +336,12 @@ final class LogsView: NSView {
     private var nowMs: Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
 
     @objc func runSearch() {
-        guard let group = selectedGroup else { setStatus("Primero elige un grupo de logs.", error: true); openPicker(); return }
+        guard let group = selectedGroup else { setStatus(L("Primero elige un grupo de logs."), error: true); openPicker(); return }
         stopFollow()
         generation += 1; let gen = generation
         clearResults()
         searching = true; searchButton.isEnabled = false
-        setStatus("Buscando…")
+        setStatus(L("Buscando…"))
         let seconds = ranges[max(0, rangeField.selectedIndex)].1
         formatted.timeWithDate = seconds >= 86_400
         let start = nowMs - Int64(seconds * 1000)
@@ -359,7 +359,7 @@ final class LogsView: NSView {
                     let keepGoing: Bool = await MainActor.run { [weak self] in
                         guard let self, gen == self.generation else { return false }
                         self.append(r.events, scrollToEnd: true)
-                        self.setStatus("Buscando… \(self.events.count) eventos")
+                        self.setStatus(L("Buscando… %d eventos", self.events.count))
                         return true
                     }
                     if !keepGoing { return }
@@ -369,8 +369,8 @@ final class LogsView: NSView {
                     guard let self, gen == self.generation else { return }
                     self.searching = false; self.searchButton.isEnabled = true
                     let n = self.events.count
-                    let more = hasMore ? " Hay más eventos: acota el rango o el filtro para verlos." : ""
-                    self.setStatus(n == 0 ? "Sin eventos en el rango y filtro elegidos." : "\(n) eventos en \(group) (\(region)).\(more)")
+                    let more = hasMore ? L(" Hay más eventos: acota el rango o el filtro para verlos.") : ""
+                    self.setStatus(n == 0 ? L("Sin eventos en el rango y filtro elegidos.") : L("%d eventos en %@ (%@).%@", n, group, region, more))
                 }
             } catch {
                 await MainActor.run { [weak self] in
@@ -387,11 +387,11 @@ final class LogsView: NSView {
     @objc func toggleFollow() { following ? stopFollow() : startFollow() }
 
     func startFollow() {
-        guard selectedGroup != nil else { setStatus("Primero elige un grupo de logs.", error: true); openPicker(); return }
+        guard selectedGroup != nil else { setStatus(L("Primero elige un grupo de logs."), error: true); openPicker(); return }
         following = true
-        followButton.title = "Detener"
+        followButton.title = L("Detener")
         followButton.layer?.backgroundColor = NSColor.systemRed.withAlphaComponent(0.55).cgColor
-        followButton.attributedTitle = NSAttributedString(string: "Detener", attributes: [.foregroundColor: NSColor.white, .font: NSFont.systemFont(ofSize: 13, weight: .semibold)])
+        followButton.attributedTitle = NSAttributedString(string: L("Detener"), attributes: [.foregroundColor: NSColor.white, .font: NSFont.systemFont(ofSize: 13, weight: .semibold)])
         followFrom = events.last?.timestamp ?? (nowMs - 60_000)
         followTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.pollFollow() }
         pollFollow()
@@ -403,7 +403,7 @@ final class LogsView: NSView {
         followTimer?.invalidate(); followTimer = nil
         followBusy = false
         followButton?.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.08).cgColor
-        followButton?.attributedTitle = NSAttributedString(string: "Seguir", attributes: [.foregroundColor: NSColor.white, .font: NSFont.systemFont(ofSize: 13, weight: .semibold)])
+        followButton?.attributedTitle = NSAttributedString(string: L("Seguir"), attributes: [.foregroundColor: NSColor.white, .font: NSFont.systemFont(ofSize: 13, weight: .semibold)])
     }
 
     func pollFollow() {
@@ -429,7 +429,7 @@ final class LogsView: NSView {
                     self.append(fetched, scrollToEnd: self.isAtBottom)
                     if let last = fetched.map(\.timestamp).max() { self.followFrom = max(self.followFrom, last) }
                     let f = DateFormatter(); f.dateFormat = "HH:mm:ss"
-                    self.setStatus("Siguiendo · \(self.events.count) eventos (+\(self.events.count - before)) · \(f.string(from: Date()))")
+                    self.setStatus(L("Siguiendo · %d eventos (+%d) · %@", self.events.count, self.events.count - before, f.string(from: Date())))
                 }
             } catch {
                 await MainActor.run { [weak self] in
@@ -535,27 +535,27 @@ final class LogsView: NSView {
     @objc private func showMore(_ b: NSButton) {
         let m = NSMenu()
         func opt(_ title: String, _ sel: Selector, _ on: Bool) { let i = m.addItem(withTitle: title, action: sel, keyEquivalent: ""); i.target = self; i.state = on ? .on : .off }
-        opt("Etiquetas de nivel", #selector(optBadges), opts.badges)
-        opt("JSON legible", #selector(optJSON), opts.json)
-        opt("Agrupar por invocación", #selector(optGroup), opts.group)
-        m.addItem(withTitle: "Plegar todas las invocaciones", action: #selector(collapseAll), keyEquivalent: "").target = self
-        m.addItem(withTitle: "Expandir todas las invocaciones", action: #selector(expandAll), keyEquivalent: "").target = self
+        opt(L("Etiquetas de nivel"), #selector(optBadges), opts.badges)
+        opt(L("JSON legible"), #selector(optJSON), opts.json)
+        opt(L("Agrupar por invocación"), #selector(optGroup), opts.group)
+        m.addItem(withTitle: L("Plegar todas las invocaciones"), action: #selector(collapseAll), keyEquivalent: "").target = self
+        m.addItem(withTitle: L("Expandir todas las invocaciones"), action: #selector(expandAll), keyEquivalent: "").target = self
         m.addItem(.separator())
-        m.addItem(withTitle: "Copiar todo", action: #selector(copyAll), keyEquivalent: "").target = self
-        m.addItem(withTitle: "Guardar como…", action: #selector(saveAs), keyEquivalent: "").target = self
+        m.addItem(withTitle: L("Copiar todo"), action: #selector(copyAll), keyEquivalent: "").target = self
+        m.addItem(withTitle: L("Guardar como…"), action: #selector(saveAs), keyEquivalent: "").target = self
         m.addItem(.separator())
-        m.addItem(withTitle: "Limpiar pantalla", action: #selector(clearTapped), keyEquivalent: "").target = self
+        m.addItem(withTitle: L("Limpiar pantalla"), action: #selector(clearTapped), keyEquivalent: "").target = self
         m.popUp(positioning: nil, at: NSPoint(x: 0, y: b.bounds.height + 2), in: b)
     }
     @objc private func copyAll() {
         NSPasteboard.general.clearContents(); NSPasteboard.general.setString(plainText, forType: .string)
-        setStatus("Copiado: \(events.count) eventos.")
+        setStatus(L("Copiado: %d eventos.", events.count))
     }
     @objc private func saveAs() {
         let p = NSSavePanel(); p.nameFieldStringValue = "logs-\((selectedGroup ?? "cloudwatch").replacingOccurrences(of: "/", with: "_")).log"
         guard p.runModal() == .OK, let url = p.url else { return }
-        do { try plainText.write(to: url, atomically: true, encoding: .utf8); setStatus("Guardado en \(url.lastPathComponent).") }
+        do { try plainText.write(to: url, atomically: true, encoding: .utf8); setStatus(L("Guardado en %@.", url.lastPathComponent)) }
         catch { setStatus(error.localizedDescription, error: true) }
     }
-    @objc private func clearTapped() { stopFollow(); generation += 1; clearResults(); setStatus("Pantalla limpia.") }
+    @objc private func clearTapped() { stopFollow(); generation += 1; clearResults(); setStatus(L("Pantalla limpia.")) }
 }

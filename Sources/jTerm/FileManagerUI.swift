@@ -14,7 +14,7 @@ struct FileItem {
 }
 
 private let dateFmt: DateFormatter = {
-    let f = DateFormatter(); f.dateFormat = "d MMM yyyy HH:mm"; return f
+    let f = DateFormatter(); f.dateFormat = "d MMM yyyy HH:mm"; f.locale = Lang.active.locale; return f
 }()
 
 enum FileSource {
@@ -107,16 +107,16 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
         titleLabel.font = .systemFont(ofSize: 13, weight: .semibold); titleLabel.textColor = .white
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        hiddenButton = IconButton(symbol: showHidden ? "eye" : "eye.slash", tip: "Mostrar archivos ocultos", size: 26, target: self, action: #selector(toggleHidden))
-        let mkdir = IconButton(symbol: "folder.badge.plus", tip: "Nueva carpeta", size: 26, target: self, action: #selector(newFolder))
-        let refresh = IconButton(symbol: "arrow.clockwise", tip: "Actualizar", size: 26, target: self, action: #selector(reload))
-        renameButton = IconButton(symbol: "pencil", tip: "Renombrar (Retorno)", size: 26, target: self, action: #selector(renameMenu))
-        deleteButton = IconButton(symbol: "trash", tip: "Eliminar (Suprimir)", size: 26, target: self, action: #selector(deleteMenu))
+        hiddenButton = IconButton(symbol: showHidden ? "eye" : "eye.slash", tip: L("Mostrar archivos ocultos"), size: 26, target: self, action: #selector(toggleHidden))
+        let mkdir = IconButton(symbol: "folder.badge.plus", tip: L("Nueva carpeta"), size: 26, target: self, action: #selector(newFolder))
+        let refresh = IconButton(symbol: "arrow.clockwise", tip: L("Actualizar"), size: 26, target: self, action: #selector(reload))
+        renameButton = IconButton(symbol: "pencil", tip: L("Renombrar (Retorno)"), size: 26, target: self, action: #selector(renameMenu))
+        deleteButton = IconButton(symbol: "trash", tip: L("Eliminar (Suprimir)"), size: 26, target: self, action: #selector(deleteMenu))
         renameButton.isEnabled = false; deleteButton.isEnabled = false
         let top = NSStackView(views: [icon, titleLabel, NSView(), renameButton, deleteButton, mkdir, hiddenButton, refresh]); top.spacing = 2
 
-        let up = IconButton(symbol: "chevron.up", tip: "Carpeta superior", size: 26, target: self, action: #selector(goUp))
-        let home = IconButton(symbol: "house", tip: "Carpeta personal", size: 26, target: self, action: #selector(goHome))
+        let up = IconButton(symbol: "chevron.up", tip: L("Carpeta superior"), size: 26, target: self, action: #selector(goUp))
+        let home = IconButton(symbol: "house", tip: L("Carpeta personal"), size: 26, target: self, action: #selector(goHome))
 
         pathBox.wantsLayer = true; pathBox.layer?.cornerRadius = 7; pathBox.layer?.borderWidth = 1
         setPathFocus(false)
@@ -140,7 +140,7 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
         errorLabel.maximumNumberOfLines = 3; errorLabel.isHidden = true
 
         // Tabla
-        for (id, title, w) in [("name", "Nombre", 200.0), ("size", "Tamaño", 70.0), ("date", "Fecha", 110.0)] {
+        for (id, title, w) in [("name", L("Nombre"), 200.0), ("size", L("Tamaño"), 70.0), ("date", L("Fecha"), 110.0)] {
             let c = NSTableColumn(identifier: .init(id)); c.title = title; c.width = w
             c.minWidth = id == "name" ? 120 : 60
             c.resizingMask = id == "name" ? .autoresizingMask : .userResizingMask
@@ -166,7 +166,7 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
         overlay.layer?.cornerRadius = 10
         spinner.style = .spinning; spinner.controlSize = .regular; spinner.isIndeterminate = true
         overlayLabel.font = .systemFont(ofSize: 12); overlayLabel.textColor = .secondaryLabelColor; overlayLabel.alignment = .center
-        retryButton = PillButton("Reintentar", primary: true, target: self, action: #selector(retry))
+        retryButton = PillButton(L("Reintentar"), primary: true, target: self, action: #selector(retry))
         let oStack = NSStackView(views: [spinner, overlayLabel, retryButton]); oStack.orientation = .vertical; oStack.spacing = 12
         oStack.alignment = .centerX
         oStack.translatesAutoresizingMaskIntoConstraints = false
@@ -277,9 +277,9 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
 
     @objc private func newFolder() {
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
-        field.placeholderString = "Nombre de la carpeta"
-        let a = NSAlert(); a.messageText = "Nueva carpeta"; a.informativeText = "En \(path)"
-        a.accessoryView = field; a.addButton(withTitle: "Crear"); a.addButton(withTitle: "Cancelar")
+        field.placeholderString = L("Nombre de la carpeta")
+        let a = NSAlert(); a.messageText = L("Nueva carpeta"); a.informativeText = L("En %@", path)
+        a.accessoryView = field; a.addButton(withTitle: L("Crear")); a.addButton(withTitle: L("Cancelar"))
         a.window.initialFirstResponder = field
         guard a.runModal() == .alertFirstButtonReturn else { return }
         let name = field.stringValue.trimmed
@@ -291,14 +291,14 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
         let sel = selectedItems
         guard !sel.isEmpty else { return }
         let a = NSAlert()
-        a.messageText = sel.count == 1 ? "¿Eliminar “\(sel[0].name)”?" : "¿Eliminar \(sel.count) elementos?"
-        a.informativeText = kind == .local ? "Se moverán a la papelera." : "Se eliminarán del servidor y no se pueden recuperar."
+        a.messageText = sel.count == 1 ? L("¿Eliminar “%@”?", sel[0].name) : L("¿Eliminar %d elementos?", sel.count)
+        a.informativeText = kind == .local ? L("Se moverán a la papelera.") : L("Se eliminarán del servidor y no se pueden recuperar.")
         a.alertStyle = .warning
-        a.addButton(withTitle: "Eliminar"); a.addButton(withTitle: "Cancelar")
+        a.addButton(withTitle: L("Eliminar")); a.addButton(withTitle: L("Cancelar"))
         if Settings.shared.filesConfirmDelete { guard a.runModal() == .alertFirstButtonReturn else { return } }
         Task {
             do { try await onDelete?(sel) }
-            catch { await MainActor.run { showAlert("No se pudo eliminar", error.localizedDescription, window: self.window) } }
+            catch { await MainActor.run { showAlert(L("No se pudo eliminar"), error.localizedDescription, window: self.window) } }
             await MainActor.run { self.reload() }
         }
     }
@@ -309,19 +309,19 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
         let item = sel[0]
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
         field.stringValue = item.name
-        let a = NSAlert(); a.messageText = "Renombrar"; a.informativeText = "“\(item.name)”"
-        a.accessoryView = field; a.addButton(withTitle: "Renombrar"); a.addButton(withTitle: "Cancelar")
+        let a = NSAlert(); a.messageText = L("Renombrar"); a.informativeText = "“\(item.name)”"
+        a.accessoryView = field; a.addButton(withTitle: L("Renombrar")); a.addButton(withTitle: L("Cancelar"))
         a.window.initialFirstResponder = field
         guard a.runModal() == .alertFirstButtonReturn else { return }
         let name = field.stringValue.trimmed
         guard !name.isEmpty, name != item.name else { return }
-        guard !name.contains("/") else { return showAlert("Nombre no válido", "El nombre no puede contener “/”.", window: window) }
+        guard !name.contains("/") else { return showAlert(L("Nombre no válido"), L("El nombre no puede contener “/”."), window: window) }
         guard !items.contains(where: { $0.name == name }) else {
-            return showAlert("Ya existe “\(name)”", "Elige otro nombre.", window: window)
+            return showAlert(L("Ya existe “%@”", name), L("Elige otro nombre."), window: window)
         }
         Task {
             do { try await onRename?(item, ((item.path as NSString).deletingLastPathComponent as NSString).appendingPathComponent(name)) }
-            catch { await MainActor.run { showAlert("No se pudo renombrar", error.localizedDescription, window: self.window) } }
+            catch { await MainActor.run { showAlert(L("No se pudo renombrar"), error.localizedDescription, window: self.window) } }
             await MainActor.run { self.reload() }
         }
     }
@@ -339,8 +339,8 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
         let r = table.clickedRow
         if visible.indices.contains(r), !table.selectedRowIndexes.contains(r) { table.selectRowIndexes([r], byExtendingSelection: false) }
         if visible.indices.contains(r) {
-            if visible[r].isDir { menu.addItem(withTitle: "Abrir", action: #selector(openClicked), keyEquivalent: "").target = self }
-            menu.addItem(withTitle: kind == .local ? "Subir al servidor" : "Descargar a este Mac",
+            if visible[r].isDir { menu.addItem(withTitle: L("Abrir"), action: #selector(openClicked), keyEquivalent: "").target = self }
+            menu.addItem(withTitle: kind == .local ? L("Subir al servidor") : L("Descargar a este Mac"),
                          action: #selector(transferSelected), keyEquivalent: "").target = self
             if let extras = extraActions?(visible[r]), !extras.isEmpty {
                 for a in extras {
@@ -350,12 +350,12 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenu
             }
             menu.addItem(.separator())
         }
-        menu.addItem(withTitle: "Nueva carpeta…", action: #selector(newFolder), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L("Nueva carpeta…"), action: #selector(newFolder), keyEquivalent: "").target = self
         if visible.indices.contains(r) {
-            menu.addItem(withTitle: "Renombrar…", action: #selector(renameMenu), keyEquivalent: "").target = self
-            menu.addItem(withTitle: "Eliminar…", action: #selector(deleteMenu), keyEquivalent: "").target = self
+            menu.addItem(withTitle: L("Renombrar…"), action: #selector(renameMenu), keyEquivalent: "").target = self
+            menu.addItem(withTitle: L("Eliminar…"), action: #selector(deleteMenu), keyEquivalent: "").target = self
         }
-        menu.addItem(withTitle: "Actualizar", action: #selector(reload), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L("Actualizar"), action: #selector(reload), keyEquivalent: "").target = self
     }
     @objc private func transferSelected() { onTransferSelected?() }
     @objc private func runExtra(_ s: NSMenuItem) { (s.representedObject as? ActionBox)?.fn() }
@@ -449,7 +449,7 @@ final class TransferRow: NSView {
     private var finished = false
 
     init(title t: String, upload: Bool) {
-        action = IconButton(symbol: "xmark", tip: "Cancelar", size: 22)
+        action = IconButton(symbol: "xmark", tip: L("Cancelar"), size: 22)
         super.init(frame: .zero)
         wantsLayer = true; layer?.cornerRadius = 8
         layer?.backgroundColor = NSColor.white.withAlphaComponent(0.05).cgColor
@@ -457,7 +457,7 @@ final class TransferRow: NSView {
         icon.symbolConfiguration = .init(pointSize: 16, weight: .regular); icon.contentTintColor = Theme.accent
         title.stringValue = t; title.font = .systemFont(ofSize: 12, weight: .medium); title.lineBreakMode = .byTruncatingMiddle
         detail.font = .systemFont(ofSize: 10); detail.textColor = .secondaryLabelColor; detail.lineBreakMode = .byTruncatingMiddle
-        detail.stringValue = "Iniciando…"
+        detail.stringValue = L("Iniciando…")
         bar.style = .bar; bar.isIndeterminate = true; bar.minValue = 0; bar.maxValue = 100; bar.controlSize = .small
         bar.startAnimation(nil)
         action.target = self; action.action = #selector(tapped)
@@ -481,13 +481,13 @@ final class TransferRow: NSView {
     func finish(error: String?) {
         finished = true
         bar.stopAnimation(nil); bar.isIndeterminate = false
-        action.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Cerrar")
-        action.toolTip = "Cerrar"
+        action.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: L("Cerrar"))
+        action.toolTip = L("Cerrar")
         if let error {
             bar.doubleValue = 0; detail.stringValue = error; detail.textColor = .systemRed; detail.lineBreakMode = .byTruncatingTail
             icon.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: nil); icon.contentTintColor = .systemRed
         } else {
-            bar.doubleValue = 100; detail.stringValue = "Completado"
+            bar.doubleValue = 100; detail.stringValue = L("Completado")
             icon.image = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil); icon.contentTintColor = .systemGreen
             let secs = Settings.shared.transferDismiss
             if secs > 0 { DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(secs)) { [weak self] in self?.onDismiss?() } }
@@ -509,7 +509,7 @@ final class FileTransferView: NSView {
         super.init(frame: frame)
         wantsLayer = true; layer?.backgroundColor = Theme.bg.cgColor
 
-        local.setTitle("Este Mac")
+        local.setTitle(L("Este Mac"))
         local.homePath = NSHomeDirectory()
         local.loader = { dir in try FileSource.local(dir) }
         local.onMkdir = { path in try? FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: false) }
@@ -522,8 +522,8 @@ final class FileTransferView: NSView {
         remote.onTransferSelected = { [weak self] in self?.downloadSelected() }
         remote.onRetry = { [weak self] in self?.onRetry?() }
 
-        let toRemote = IconButton(symbol: "arrow.right", tip: "Subir selección al servidor", size: 32, target: self, action: #selector(uploadTapped))
-        let toLocal = IconButton(symbol: "arrow.left", tip: "Descargar selección a este Mac", size: 32, target: self, action: #selector(downloadTapped))
+        let toRemote = IconButton(symbol: "arrow.right", tip: L("Subir selección al servidor"), size: 32, target: self, action: #selector(uploadTapped))
+        let toLocal = IconButton(symbol: "arrow.left", tip: L("Descargar selección a este Mac"), size: 32, target: self, action: #selector(downloadTapped))
         let strip = NSStackView(views: [toRemote, toLocal]); strip.orientation = .vertical; strip.spacing = 8
 
         queue.orientation = .vertical; queue.spacing = 6; queue.alignment = .leading
@@ -546,7 +546,7 @@ final class FileTransferView: NSView {
             queue.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
         ])
         local.navigate(Settings.shared.resolvedLocalStart)
-        showConnecting("Conectando…")
+        showConnecting(L("Conectando…"))
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -560,7 +560,7 @@ final class FileTransferView: NSView {
         remote.setTitle(s.target.title)
         remote.homePath = s.home
         remote.loader = { [weak s] dir in
-            guard let s else { throw AWSError(message: "Sesión cerrada") }
+            guard let s else { throw AWSError(message: L("Sesión cerrada")) }
             return try await FileSource.remote(s, dir)
         }
         remote.onMkdir = { [weak s] path in try? await s?.mkdir(path) }
@@ -592,12 +592,12 @@ final class FileTransferView: NSView {
     }
 
     func upload(_ paths: [String], to dir: String) {
-        run(paths, dir, .upload, "Subiendo \(describe(paths))") { self.remote.reload() }
+        run(paths, dir, .upload, L("Subiendo %@", describe(paths))) { self.remote.reload() }
     }
     func download(_ paths: [String], to dir: String) {
-        run(paths, dir, .download, "Descargando \(describe(paths))") { self.local.reload() }
+        run(paths, dir, .download, L("Descargando %@", describe(paths))) { self.local.reload() }
     }
-    private func describe(_ p: [String]) -> String { p.count == 1 ? (p[0] as NSString).lastPathComponent : "\(p.count) elementos" }
+    private func describe(_ p: [String]) -> String { p.count == 1 ? (p[0] as NSString).lastPathComponent : L("%d elementos", p.count) }
 
     private func run(_ sources: [String], _ dest: String, _ dir: SFTPSession.Direction, _ title: String, done: @escaping () -> Void) {
         guard let session, !dest.isEmpty else { return }
@@ -624,7 +624,7 @@ final class FileTransferView: NSView {
 
 final class FileTab: Tab {
     let id = UUID()
-    var title = "Archivos"
+    var title = L("Archivos")
     let iconName = "arrow.left.arrow.right.square"
     let view = FileTransferView()
     var content: NSView { view }
@@ -648,11 +648,11 @@ final class FileTab: Tab {
     func start() {
         session?.close(); session = nil
         AppState.shared.onChange?()
-        view.showConnecting("Conectando…")
+        view.showConnecting(L("Conectando…"))
         Task { [self] in
             do {
                 let target = try await provider()
-                await MainActor.run { self.title = "Archivos · \(target.title)"; AppState.shared.onChange?() }
+                await MainActor.run { self.title = L("Archivos · %@", target.title); AppState.shared.onChange?() }
                 let s = SFTPSession(target: target)
                 try await s.connect()
                 await MainActor.run {
@@ -660,7 +660,7 @@ final class FileTab: Tab {
                     s.onDisconnect = { [weak self, weak s] in
                         guard let self, self.session === s else { return }
                         self.session = nil
-                        self.view.showError("La conexión se cerró.")
+                        self.view.showError(L("La conexión se cerró."))
                         AppState.shared.onChange?()
                     }
                     self.view.attach(s, startPath: self.startPath)
