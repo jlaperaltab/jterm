@@ -168,6 +168,7 @@ enum Message {
     FinderQuery(String),
     FinderRun(usize, bool),
     FinderClose,
+    FinderPin(usize),
     Relaunch,
     // Actualizador
     UpdateCheck(bool),
@@ -1228,7 +1229,7 @@ impl App {
         let mut v = Vec::new();
         for (i, t) in self.tabs.iter().enumerate() {
             let n = t.grid.len();
-            v.push(FinderItem {
+            v.push(FinderItem { pin: None, pinned: false,
                 kind: FinderKind::Tab,
                 title: t.title.clone(),
                 subtitle: if n > 1 { format!("Pestaña abierta · {n} paneles") } else { "Pestaña abierta".into() },
@@ -1250,10 +1251,10 @@ impl App {
             screens.push((format!("Archivos · {}", f.title), ui::Icon::FolderOpen, Screen::Files));
         }
         for (title, icon, sc) in screens {
-            v.push(FinderItem { kind: FinderKind::Tab, title, subtitle: "Pestaña abierta".into(), env: None, keywords: String::new(), target: FinderTarget::Screen(sc), icon: Some(icon) });
+            v.push(FinderItem { pin: None, pinned: false, kind: FinderKind::Tab, title, subtitle: "Pestaña abierta".into(), env: None, keywords: String::new(), target: FinderTarget::Screen(sc), icon: Some(icon) });
         }
         for s in &self.servers.items {
-            v.push(FinderItem {
+            v.push(FinderItem { pin: None, pinned: false,
                 kind: FinderKind::Server,
                 title: if s.name.is_empty() { s.host.clone() } else { s.name.clone() },
                 subtitle: s.destination(),
@@ -1265,7 +1266,7 @@ impl App {
         }
         let aws_env = self.aws_account().and_then(|a| a.env);
         for (i, inst) in self.aws.instances.iter().enumerate() {
-            v.push(FinderItem {
+            v.push(FinderItem { pin: None, pinned: false,
                 kind: FinderKind::Instance,
                 title: inst.name.clone(),
                 subtitle: format!("{} · {} · {}", inst.kind, inst.region, aws_ui::ip_label(inst)),
@@ -1276,7 +1277,7 @@ impl App {
             });
         }
         for c in &self.snippets.items {
-            v.push(FinderItem {
+            v.push(FinderItem { pin: None, pinned: false,
                 kind: FinderKind::Snippet,
                 title: c.title(),
                 subtitle: c.first_line(),
@@ -1296,9 +1297,39 @@ impl App {
             ("Ajustes", MenuAction::Settings),
             ("Buscar actualizaciones", MenuAction::CheckUpdates),
         ] {
-            v.push(FinderItem { kind: FinderKind::Action, title: tr(title), subtitle: String::new(), env: None, keywords: String::new(), target: FinderTarget::Action(a), icon: None });
+            v.push(FinderItem { pin: None, pinned: false, kind: FinderKind::Action, title: tr(title), subtitle: String::new(), env: None, keywords: String::new(), target: FinderTarget::Action(a), icon: None });
+        }
+        // Claves estables para fijar (servidores, instancias, comandos y acciones) y estado de fijado.
+        for it in &mut v {
+            it.pin = match it.target {
+                FinderTarget::Server(id) => Some(format!("server:{id}")),
+                FinderTarget::Snippet(id) => Some(format!("snippet:{id}")),
+                FinderTarget::Instance(i) => self.aws.instances.get(i).map(|x| format!("ec2:{}", x.id)),
+                FinderTarget::Action(a) => Some(format!("action:{a:?}")),
+                _ => None,
+            };
+            it.pinned = it.pin.as_ref().is_some_and(|k| self.settings.finder_pins.contains(k));
         }
         v
+    }
+
+    /// Fija o desfija el resultado `pos` y recalcula la lista sin perder la consulta ni la selección.
+    fn toggle_finder_pin(&mut self, pos: usize) {
+        let Some(f) = &self.finder else { return };
+        let Some(key) = f.shown.get(pos).and_then(|&i| f.items[i].pin.clone()) else { return };
+        let query = f.query.clone();
+        if let Some(i) = self.settings.finder_pins.iter().position(|k| *k == key) {
+            self.settings.finder_pins.remove(i);
+        } else {
+            self.settings.finder_pins.push(key.clone());
+        }
+        self.save_settings();
+        let mut st = FinderState::new(self.finder_items());
+        st.set_query(query);
+        if let Some(p) = st.position_of(&key) {
+            st.selected = p;
+        }
+        self.finder = Some(st);
     }
 
     /// Abre el resultado `pos` (índice en la lista filtrada). Con ⌥, un comando guardado se pega Y se ejecuta.
@@ -1327,7 +1358,7 @@ impl App {
                     t.backend.paste(&s.command);
                     t.cache.clear();
                 }
-                if alt && !self.guard_enter() {
+                if (alt || s.auto_run) && !self.guard_enter() {
                     if let Some(t) = self.active_tab() {
                         t.backend.mark_prompt();
                         t.backend.write(&b"\r"[..]);
@@ -1945,6 +1976,13 @@ impl App {
             return Task::none();
         }
 
+        // ⌘P con el buscador abierto: fija o desfija el resultado seleccionado.
+        if self.finder.is_some() && modifiers.logo() && matches!(&key, keyboard::Key::Character(c) if c.eq_ignore_ascii_case("p")) {
+            let pos = self.finder.as_ref().unwrap().selected;
+            self.toggle_finder_pin(pos);
+            return Task::none();
+        }
+
         // Con el buscador rápido abierto, el teclado es del buscador (escribir lo recibe el campo de texto).
         if self.finder.is_some() && !modifiers.logo() {
             use keyboard::key::Named as N;
@@ -2232,6 +2270,7 @@ impl App {
             }
             Message::FinderRun(pos, alt) => return self.run_finder(pos, alt),
             Message::FinderClose => self.finder = None,
+            Message::FinderPin(pos) => self.toggle_finder_pin(pos),
             Message::UpdateCheck(manual) => return self.update_check(manual),
             Message::UpdateChecked(manual, r) => {
                 self.update_busy = false;
@@ -3232,12 +3271,27 @@ impl App {
 
     /// Botón flotante (esquina inferior derecha del terminal) que abre los comandos guardados.
     fn snippets_fab(&self) -> Element<'_, Message> {
+        let accent = self.accent();
         let fg = self.palette.fg;
-        let btn = button(ui::icon(ui::Icon::SquareTerminal, 17.0, Color { a: 0.8, ..fg })).padding(12).on_press(Message::OpenSnippets).style(move |_, st| button::Style {
-            background: Some(Background::Color(Color { a: if matches!(st, button::Status::Hovered) { 0.2 } else { 0.1 }, ..fg })),
-            text_color: fg,
-            border: Border { radius: 22.0.into(), width: 1.0, color: Color { a: 0.14, ..fg } },
-            ..Default::default()
+        let base = self.palette.bg;
+        let content = row![
+            ui::icon(ui::Icon::SquareTerminal, 15.0, accent),
+            text(tr("Comandos")).size(12).color(Color { a: 0.85, ..fg }),
+            text("⇧⌘K").size(10).color(Color { a: 0.4, ..fg }),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center);
+        let btn = button(content).padding([8, 14]).on_press(Message::OpenSnippets).style(move |_, st| {
+            let hover = matches!(st, button::Status::Hovered | button::Status::Pressed);
+            // Fondo opaco (el texto del terminal no debe verse detrás) con un velo del color de acento.
+            let mix = |a: f32| Color { r: base.r + (accent.r - base.r) * a, g: base.g + (accent.g - base.g) * a, b: base.b + (accent.b - base.b) * a, a: 1.0 };
+            button::Style {
+                background: Some(Background::Color(mix(if hover { 0.26 } else { 0.14 }))),
+                text_color: fg,
+                border: Border { radius: 20.0.into(), width: 1.0, color: Color { a: if hover { 0.8 } else { 0.45 }, ..accent } },
+                shadow: iced::Shadow { color: Color { a: 0.35, ..Color::BLACK }, offset: iced::Vector::new(0.0, 4.0), blur_radius: 12.0 },
+                ..Default::default()
+            }
         });
         container(btn)
             .width(Length::Fill)
@@ -3493,8 +3547,15 @@ impl App {
         }
         for s in &self.servers.items {
             let name = if s.name.is_empty() { s.host.clone() } else { s.name.clone() };
+            let green = Color::from_rgb8(0x30, 0xd1, 0x58);
+            let is_conn = connected.contains(&s.id);
+            let active = self.active_tab().and_then(|t| t.server) == Some(s.id);
+            // Línea 1: punto de estado + nombre + etiqueta de entorno.
             let mut title: Row<Message> = Row::new().spacing(7).align_y(iced::Alignment::Center);
-            title = title.push(text(name).size(13).color(fg));
+            if is_conn {
+                title = title.push(text("●").size(9).color(green));
+            }
+            title = title.push(text(name).size(13).color(fg).wrapping(iced::widget::text::Wrapping::None));
             if let Some(env) = s.env {
                 let (r, g, b) = env.rgb();
                 let c = Color::from_rgb8(r, g, b);
@@ -3504,30 +3565,35 @@ impl App {
                     ..Default::default()
                 }));
             }
+            // Línea 2: método de autenticación + usuario@host.
             let sub = if s.user.is_empty() { s.host.clone() } else { format!("{}@{}", s.user, s.host) };
-            let lock = ui::icon(if s.auth == AuthMethod::Key { ui::Icon::KeyRound } else { ui::Icon::Lock }, 14.0, Color::from_rgb8(0x4c, 0xc3, 0x8a));
-            let mut info: Column<Message> = column![title, text(sub).size(11).color(dim)].spacing(2);
-            if connected.contains(&s.id) {
-                let green = Color::from_rgb8(0x30, 0xd1, 0x58);
-                info = info.push(
-                    container(row![text("●").size(7).color(green), text(tr("Conectado")).size(10).color(green)].spacing(5).align_y(iced::Alignment::Center))
-                        .padding([2, 8])
-                        .style(move |_| container::Style {
-                            background: Some(Background::Color(Color { a: 0.16, ..green })),
-                            border: Border { radius: 9.0.into(), ..Default::default() },
-                            ..Default::default()
-                        }),
-                );
-            }
-            let label = row![lock, info].spacing(10).align_y(iced::Alignment::Center);
-            let active = self.active_tab().and_then(|t| t.server) == Some(s.id);
-            let connect = button(label).width(Length::Fill).padding([7, 9]).on_press(Message::Connect(s.id)).style(move |_, st| button::Style {
-                background: Some(Background::Color(if active { Color { a: 0.12, ..fg } } else if matches!(st, button::Status::Hovered) { Color { a: 0.07, ..fg } } else { Color::TRANSPARENT })),
-                text_color: fg,
-                border: Border { radius: 9.0.into(), width: if active { 1.0 } else { 0.0 }, color: Color { a: 0.5, ..accent } },
-                ..Default::default()
-            });
-            col = col.push(row![connect, flat_button("📁", dim).on_press(Message::FilesOpen(s.id)), flat_button("✎", dim).on_press(Message::EditServer(s.id))].align_y(iced::Alignment::Center));
+            let auth_icon = ui::icon(if s.auth == AuthMethod::Key { ui::Icon::KeyRound } else { ui::Icon::Lock }, 11.0, dim);
+            let subline = row![auth_icon, text(sub).size(11).color(dim).wrapping(iced::widget::text::Wrapping::None)].spacing(5).align_y(iced::Alignment::Center);
+            let mini = |i: ui::Icon, m: Message| {
+                button(ui::icon(i, 13.0, dim)).padding([3, 5]).on_press(m).style(move |_, st| button::Style {
+                    background: Some(Background::Color(if matches!(st, button::Status::Hovered | button::Status::Pressed) { Color { a: 0.14, ..fg } } else { Color::TRANSPARENT })),
+                    text_color: dim,
+                    border: Border { radius: 6.0.into(), ..Default::default() },
+                    ..Default::default()
+                })
+            };
+            let acts = row![mini(ui::Icon::Folder, Message::FilesOpen(s.id)), mini(ui::Icon::Pencil, Message::EditServer(s.id))].spacing(2);
+            let body = row![column![title, subline].spacing(3).width(Length::Fill), acts].spacing(4).align_y(iced::Alignment::Center);
+            let card = container(body)
+                .padding(iced::Padding { top: 7.0, bottom: 7.0, left: 10.0, right: 6.0 })
+                .width(Length::Fill)
+                .style(move |_| container::Style {
+                    background: Some(Background::Color(Color { a: if active { 0.1 } else { 0.04 }, ..fg })),
+                    border: Border {
+                        radius: 10.0.into(),
+                        width: 1.0,
+                        color: if active { Color { a: 0.6, ..accent } } else if is_conn { Color { a: 0.4, ..green } } else { Color { a: 0.08, ..fg } },
+                    },
+                    ..Default::default()
+                });
+            // Toda la tarjeta conecta; los botones de la cabecera tienen prioridad.
+            let card = iced::widget::mouse_area(card).on_press(Message::Connect(s.id)).interaction(iced::mouse::Interaction::Pointer);
+            col = col.push(card);
         }
         if let Some(e) = &self.error {
             col = col.push(text(tr(e)).size(11).color(rgb("#ff6b6b")));

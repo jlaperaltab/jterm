@@ -257,13 +257,6 @@ pub fn view<'a>(st: &'a LogsState, p: &Palette, accent: Color) -> Element<'a, Me
     let (fg, dim, bg) = (p.fg, Color { a: 0.55, ..p.fg }, p.bg);
     let regions: Vec<String> = REGIONS.iter().map(|r| r.to_string()).collect();
     let ranges: Vec<String> = RANGES.iter().map(|(l, _)| l.to_string()).collect();
-    let small = |label: &'static str, m: Option<Message>| {
-        let b = action_button(label, fg, fg, false);
-        match m {
-            Some(m) => b.on_press(m),
-            None => b,
-        }
-    };
     let busy = st.searching;
 
     let group_label = st.group.as_deref().map(|g| ellipsize_start(g, GROUP_LABEL_CHARS)).unwrap_or_else(|| "Elegir grupo de logs…".into());
@@ -279,31 +272,27 @@ pub fn view<'a>(st: &'a LogsState, p: &Palette, accent: Color) -> Element<'a, Me
     )
     .width(Length::Fixed(300.0))
     .on_press(Message::LogsPicker(true));
-    let mode_idx = if st.text_mode { 1 } else { 0 };
-    let top = row![
-        field("Región", pick_list(regions, Some(st.region.clone()), Message::LogsRegion).width(Length::Fixed(150.0)).into()),
-        field("Grupo de logs", group_btn.into()),
+    let row_a = row![
+        field("Región", pick_list(regions, Some(st.region.clone()), Message::LogsRegion).width(Length::Fixed(140.0)).into()),
+        container(field("Grupo de logs", group_btn.width(Length::Fill).into())).width(Length::Fill),
         field("Rango", pick_list(ranges.into_iter().map(crate::i18n::Tr).collect::<Vec<_>>(), Some(crate::i18n::Tr(st.range.clone())), |t: crate::i18n::Tr<String>| Message::LogsRange(t.0)).width(Length::Fixed(170.0)).into()),
-        field("Filtro (sintaxis de CloudWatch)", text_input("ERROR · ?ERROR ?WARN · { $.level = \"error\" }", &st.filter).on_input(Message::LogsFilter).on_submit(Message::LogsSearch).width(Length::Fixed(280.0)).into()),
-        field("Stream", text_input("Prefijo del stream (opcional)", &st.stream_prefix).on_input(Message::LogsStream).on_submit(Message::LogsSearch).width(Length::Fixed(210.0)).into()),
-        row![
-            action_button(if busy { "Buscando…" } else { "Buscar" }, accent, fg, true).on_press_maybe((!busy).then_some(Message::LogsSearch)),
-            if st.following { action_button("Detener", Color::from_rgb8(0xff, 0x6b, 0x6b), fg, true) } else { crate::ui::pill("Seguir", crate::ui::Kind::Secondary, fg, fg) }.on_press(Message::LogsFollow),
-            crate::ui::segmented(&["Formateado", "Texto"], mode_idx, accent, fg, |i| Message::LogsMode(i == 1)),
-            small("✕ Cerrar", Some(Message::LogsClose)),
-        ]
-        .spacing(8)
-        .align_y(iced::Alignment::Center),
     ]
-    .spacing(12)
-    .align_y(iced::Alignment::End)
-    .wrap()
-    .vertical_spacing(10);
+    .spacing(10)
+    .align_y(iced::Alignment::End);
+    let row_b = row![
+        container(field("Filtro (sintaxis de CloudWatch)", text_input("ERROR · ?ERROR ?WARN · { $.level = \"error\" }", &st.filter).on_input(Message::LogsFilter).on_submit(Message::LogsSearch).width(Length::Fill).into())).width(Length::Fill),
+        field("Stream", text_input("Prefijo (opcional)", &st.stream_prefix).on_input(Message::LogsStream).on_submit(Message::LogsSearch).width(Length::Fixed(170.0)).into()),
+        action_button(if busy { "Buscando…" } else { "Buscar" }, accent, fg, true).on_press_maybe((!busy).then_some(Message::LogsSearch)),
+        if st.following { action_button("Detener", Color::from_rgb8(0xff, 0x6b, 0x6b), fg, true) } else { crate::ui::pill("Seguir", crate::ui::Kind::Secondary, fg, fg) }.on_press(Message::LogsFollow),
+    ]
+    .spacing(10)
+    .align_y(iced::Alignment::End);
+    let top = column![row_a, row_b].spacing(10);
 
     // Chips de nivel + opciones de vista.
     let chip = |label: String, sel: bool, color: Color, on: Message| {
         button(text(tr(&label)).size(11).color(if sel { Color::BLACK } else { color })).padding([3, 9]).on_press(on).style(move |_, s| button::Style {
-            background: Some(Background::Color(if sel { color } else if matches!(s, button::Status::Hovered) { Color { a: 0.2, ..color } } else { Color { a: 0.1, ..color } })),
+            background: Some(Background::Color(if sel { color } else if matches!(s, button::Status::Hovered) { Color { a: 0.22, ..color } } else { Color { a: 0.1, ..color } })),
             text_color: color,
             border: Border { radius: 10.0.into(), ..Default::default() },
             ..Default::default()
@@ -314,18 +303,24 @@ pub fn view<'a>(st: &'a LogsState, p: &Palette, accent: Color) -> Element<'a, Me
     for l in [LogLevel::Error, LogLevel::Warn, LogLevel::Info, LogLevel::Debug, LogLevel::Platform] {
         chips = chips.push(chip(format!("{} {}", l.label(), st.count_level(l)), st.level == Some(l), level_color(l), Message::LogsLevel(Some(l))));
     }
-    let toggle = |label: &'static str, on: bool, m: Message| action_button(label, if on { accent } else { dim }, fg, false).on_press(m);
-    chips = chips.push(toggle("Agrupar", st.by_invocation, Message::LogsToggleGroup));
-    chips = chips.push(toggle("JSON", st.pretty_json, Message::LogsTogglePretty));
-    chips = chips.push(small("Copiar", Some(Message::LogsCopyAll)));
-    chips = chips.push(small("Guardar…", Some(Message::LogsSave)));
-    chips = chips.push(small("Limpiar", Some(Message::LogsClear)));
+    let toggle = |label: &'static str, on: bool, m: Message| crate::ui::compact(label, if on { accent } else { dim }, fg).on_press(m);
+    let tools = row![
+        toggle("Agrupar", st.by_invocation, Message::LogsToggleGroup),
+        toggle("JSON", st.pretty_json, Message::LogsTogglePretty),
+        toggle("Texto", st.text_mode, Message::LogsMode(!st.text_mode)),
+        crate::ui::compact("⧉ Copiar", fg, fg).on_press(Message::LogsCopyAll),
+        crate::ui::compact("⬇", fg, fg).on_press(Message::LogsSave),
+        crate::ui::compact("🗑", fg, fg).on_press(Message::LogsClear),
+    ]
+    .spacing(6)
+    .align_y(iced::Alignment::Center);
+    let options = Row::new().push(chips).push(tools).spacing(18).wrap().vertical_spacing(6);
 
     // Filas (solo la ventana final).
     let rows = st.rows();
     let infos = logs::infos(&st.parsed);
     let skip = rows.len().saturating_sub(st.window);
-    let mut list: Column<Message> = Column::new().spacing(1);
+    let mut list: Column<Message> = Column::new().spacing(1).padding(iced::Padding { top: 0.0, bottom: 0.0, left: 0.0, right: 10.0 });
     if skip > 0 {
         list = list.push(
             container(action_button("Mostrar anteriores ↑", accent, fg, false).on_press(Message::LogsMore)).padding([4, 0]).center_x(Length::Fill),
@@ -362,7 +357,16 @@ pub fn view<'a>(st: &'a LogsState, p: &Palette, accent: Color) -> Element<'a, Me
     }
 
     let status = text(tr(&st.status)).size(11).color(if st.is_error { Color::from_rgb8(0xff, 0x6b, 0x6b) } else { dim });
-    container(column![top, chips.wrap().vertical_spacing(6), scrollable(list).id(SCROLL_ID).on_scroll(|v| Message::LogsScrolled(v.relative_offset().y)).height(Length::Fill), status].spacing(8).padding(12))
+    let list_box = container(scrollable(list).id(SCROLL_ID).on_scroll(|v| Message::LogsScrolled(v.relative_offset().y)).height(Length::Fill))
+        .padding(iced::Padding { top: 6.0, bottom: 6.0, left: 4.0, right: 4.0 })
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(move |_| container::Style {
+            background: Some(Background::Color(Color { a: 0.04, ..fg })),
+            border: Border { radius: 10.0.into(), width: 1.0, color: Color { a: 0.08, ..fg } },
+            ..Default::default()
+        });
+    container(column![top, options, list_box, status].spacing(10).padding(14))
         .width(Length::Fill)
         .height(Length::Fill)
         .style(move |_| container::Style { background: Some(Background::Color(bg)), ..Default::default() })
@@ -381,9 +385,9 @@ fn event_row<'a>(st: &'a LogsState, i: usize, p: &Palette, dim: Color) -> Elemen
     }
 
     let color = level_color(pl.level);
-    let badge = container(text(pl.level.label()).size(9).color(Color::BLACK)).padding([1, 5]).width(Length::Fixed(52.0)).center_x(Length::Fixed(52.0)).style(move |_| container::Style {
-        background: Some(Background::Color(color)),
-        border: Border { radius: 4.0.into(), ..Default::default() },
+    let badge = container(text(pl.level.label()).size(9).color(color)).padding([2, 5]).width(Length::Fixed(52.0)).center_x(Length::Fixed(52.0)).style(move |_| container::Style {
+        background: Some(Background::Color(Color { a: 0.16, ..color })),
+        border: Border { radius: 5.0.into(), ..Default::default() },
         ..Default::default()
     });
     let mut head: Row<Message> = Row::new().spacing(8).align_y(iced::Alignment::Center);
@@ -399,12 +403,13 @@ fn event_row<'a>(st: &'a LogsState, i: usize, p: &Palette, dim: Color) -> Elemen
             head = head.push(text(format!("{d:.0} ms")).size(10).color(dim));
         }
     }
+    let tint = match pl.level { LogLevel::Error => 0.08, LogLevel::Warn => 0.05, _ => 0.0 };
     let has_detail = pl.json.is_some() || !pl.extra_lines().is_empty() || pl.platform == Some(Platform::Report);
     let open = st.expanded.contains(&i);
-    let mut col: Column<Message> = column![button(head).width(Length::Fill).padding([3, 8]).on_press(Message::LogsExpand(i)).style(move |_, s| button::Style {
-        background: Some(Background::Color(if matches!(s, button::Status::Hovered) { Color { a: 0.07, ..fg } } else { Color::TRANSPARENT })),
+    let mut col: Column<Message> = column![button(head).width(Length::Fill).padding([4, 8]).on_press(Message::LogsExpand(i)).style(move |_, s| button::Style {
+        background: Some(Background::Color(if matches!(s, button::Status::Hovered) { Color { a: 0.08, ..fg } } else if tint > 0.0 { Color { a: tint, ..color } } else { Color::TRANSPARENT })),
         text_color: fg,
-        border: Border { radius: 4.0.into(), ..Default::default() },
+        border: Border { radius: 6.0.into(), ..Default::default() },
         ..Default::default()
     })]
     .spacing(2);

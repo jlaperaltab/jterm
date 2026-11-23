@@ -50,6 +50,9 @@ pub struct Settings {
     // AWS
     pub aws_region: String,
     pub aws_user: String,
+    // Buscador rápido
+    /// Elementos fijados arriba en ⌘K (claves como `server:<uuid>`). Se sincroniza con iCloud.
+    pub finder_pins: Vec<String>,
 }
 
 impl Default for Settings {
@@ -66,7 +69,7 @@ impl Default for Settings {
             ssh_forward_agent: false, ssh_extra: String::new(), default_user: String::new(), default_port: 22,
             files_local_hidden: false, files_remote_hidden: false, files_local_start: String::new(),
             files_confirm_delete: true, transfer_dismiss: 4,
-            aws_region: "us-east-1".into(), aws_user: "ec2-user".into(),
+            aws_region: "us-east-1".into(), aws_user: "ec2-user".into(), finder_pins: vec![],
         }
     }
 }

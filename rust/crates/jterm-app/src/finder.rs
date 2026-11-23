@@ -65,6 +65,9 @@ pub struct Item {
     pub target: Target,
     /// Icono propio (si no, el del tipo).
     pub icon: Option<Icon>,
+    /// Clave estable para fijarlo (las pestañas no se pueden fijar).
+    pub pin: Option<String>,
+    pub pinned: bool,
 }
 
 fn env_words(e: Option<ServerEnv>) -> String {
@@ -111,9 +114,12 @@ fn is_subsequence(needle: &str, hay: &str) -> bool {
 /// Índices de `items` que coinciden, mejor primero (a igual puntuación, por tipo: pestañas, servidores…).
 pub fn filter(items: &[Item], query: &str) -> Vec<usize> {
     if query.trim().is_empty() {
-        return (0..items.len()).collect();
+        // Los fijados van arriba, conservando el orden de siempre dentro de cada grupo.
+        let (mut all, rest): (Vec<usize>, Vec<usize>) = (0..items.len()).partition(|&i| items[i].pinned);
+        all.extend(rest);
+        return all;
     }
-    let mut scored: Vec<(i32, usize)> = items.iter().enumerate().filter_map(|(i, it)| score(query, it).map(|s| (s, i))).collect();
+    let mut scored: Vec<(i32, usize)> = items.iter().enumerate().filter_map(|(i, it)| score(query, it).map(|s| (s + if it.pinned { 60 } else { 0 }, i))).collect();
     scored.sort_by(|a, b| b.0.cmp(&a.0).then(items[a.1].kind.cmp(&items[b.1].kind)).then(a.1.cmp(&b.1)));
     scored.into_iter().map(|(_, i)| i).collect()
 }
@@ -135,7 +141,7 @@ pub struct FinderState {
 
 impl FinderState {
     pub fn new(items: Vec<Item>) -> Self {
-        let shown = (0..items.len()).collect();
+        let shown = filter(&items, "");
         FinderState { query: String::new(), items, shown, selected: 0 }
     }
 
@@ -150,6 +156,11 @@ impl FinderState {
             return;
         }
         self.selected = (self.selected as i32 + d).clamp(0, self.shown.len() as i32 - 1) as usize;
+    }
+
+    /// Posición (en la lista filtrada) del elemento con esa clave de fijado.
+    pub fn position_of(&self, pin: &str) -> Option<usize> {
+        self.shown.iter().position(|&i| self.items[i].pin.as_deref() == Some(pin))
     }
 
     pub fn current(&self) -> Option<&Item> {
@@ -198,10 +209,26 @@ pub fn view<'a>(st: &'a FinderState, p: &Palette, accent: Color) -> Element<'a, 
                 ..Default::default()
             }));
         }
+        let label = text(tr(it.kind.label())).size(10).color(Color { a: 0.38, ..Color::WHITE });
+        let right: Element<Message> = if it.pin.is_some() {
+            let c = if it.pinned { accent } else { Color { a: if sel { 0.6 } else { 0.28 }, ..Color::WHITE } };
+            let pin = iced::widget::button(ui::icon(Icon::Pin, 14.0, c))
+                .padding([4, 6])
+                .on_press(Message::FinderPin(pos))
+                .style(move |_, s| iced::widget::button::Style {
+                    background: Some(Background::Color(if matches!(s, iced::widget::button::Status::Hovered) { Color { a: 0.12, ..Color::WHITE } } else { Color::TRANSPARENT })),
+                    text_color: c,
+                    border: Border { radius: 6.0.into(), ..Default::default() },
+                    ..Default::default()
+                });
+            row![label, pin].spacing(6).align_y(iced::Alignment::Center).into()
+        } else {
+            label.into()
+        };
         let line = row![
             container(ui::icon(it.icon.unwrap_or(it.kind.icon()), 15.0, color.unwrap_or(accent))).width(Length::Fixed(22.0)),
             column![title, text(tr(&it.subtitle)).size(11).color(dim).wrapping(iced::widget::text::Wrapping::None)].spacing(1).width(Length::Fill),
-            text(tr(it.kind.label())).size(10).color(Color { a: 0.38, ..Color::WHITE }),
+            right,
         ]
         .spacing(10)
         .align_y(iced::Alignment::Center);
@@ -219,7 +246,7 @@ pub fn view<'a>(st: &'a FinderState, p: &Palette, accent: Color) -> Element<'a, 
     } else {
         container(list).padding([6, 6]).into()
     };
-    let hint = container(text(tr("↩ abrir     ⌥↩ pegar y ejecutar comando     ↑↓ moverse     esc cerrar")).size(10).color(Color { a: 0.35, ..Color::WHITE })).padding([6, 0]).center_x(Length::Fill);
+    let hint = container(text(tr("↩ abrir     ⌥↩ pegar y ejecutar     ⌘P fijar     ↑↓ moverse     esc cerrar")).size(10).color(Color { a: 0.35, ..Color::WHITE })).padding([6, 0]).center_x(Length::Fill);
     container(column![search, divider, body, hint])
         .width(Length::Fixed(600.0))
         .style(move |_| container::Style {
@@ -236,7 +263,7 @@ mod tests {
     use super::*;
 
     fn item(kind: Kind, title: &str, sub: &str) -> Item {
-        Item { kind, title: title.into(), subtitle: sub.into(), env: None, keywords: String::new(), target: Target::Action(MenuAction::NewTab), icon: None }
+        Item { kind, title: title.into(), subtitle: sub.into(), env: None, keywords: String::new(), target: Target::Action(MenuAction::NewTab), icon: None, pin: None, pinned: false }
     }
 
     #[test]
@@ -297,5 +324,20 @@ mod tests {
         let mut empty = FinderState::new(vec![]);
         empty.move_selection(1);
         assert!(empty.current().is_none());
+    }
+
+    #[test]
+    fn pinned_items_go_first_and_get_a_boost() {
+        let mut items = vec![item(Kind::Server, "alfa", ""), item(Kind::Server, "beta", ""), item(Kind::Snippet, "gamma", "")];
+        items[2].pinned = true;
+        assert_eq!(filter(&items, ""), [2, 0, 1], "sin consulta, los fijados primero");
+        let mut st = FinderState::new(items.clone());
+        assert_eq!(st.shown, [2, 0, 1]);
+        items.push(item(Kind::Server, "alfa dos", ""));
+        items[3].pinned = true;
+        // Con consulta, a igual coincidencia gana el fijado.
+        assert_eq!(filter(&items, "alfa")[0], 3);
+        st.set_query("zzz".into());
+        assert!(st.shown.is_empty());
     }
 }

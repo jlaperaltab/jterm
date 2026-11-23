@@ -430,4 +430,14 @@ mod tests {
         let weird = BTreeMap::from([("nope".to_string(), JsonValue::Int(1)), ("theme".to_string(), JsonValue::Int(3))]);
         assert_eq!(merge_settings(&other, &weird), other);
     }
+
+    #[test]
+    fn finder_pins_travel_between_macs() {
+        let mut a = Settings::default();
+        a.finder_pins = vec!["server:abc".into(), "action:NewTab".into()];
+        let f = settings_fields(&a);
+        assert!(f.contains_key("finderPins"));
+        let merged = merge_settings(&Settings::default(), &f);
+        assert_eq!(merged.finder_pins, a.finder_pins);
+    }
 }

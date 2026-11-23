@@ -57,6 +57,7 @@ const EXTRA: &[(&str, &str)] = &[
     ("Edición", "Edit"),
     ("Paneles", "Panes"),
     ("Comandos", "Commands"),
+    ("↩ abrir     ⌥↩ pegar y ejecutar     ⌘P fijar     ↑↓ moverse     esc cerrar", "↩ open     ⌥↩ paste and run     ⌘P pin     ↑↓ move     esc close"),
     ("Pestañas", "Tabs"),
     ("Ventana", "Window"),
     ("Copiar", "Copy"),
