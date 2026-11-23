@@ -150,11 +150,12 @@ final class PaneView: NSView {
     }
     required init?(coder: NSCoder) { fatalError() }
 
-    /// Con varios paneles se deja un margen para el borde de foco.
+    /// Margen interior: separa el texto del borde de la ventana y, con varios paneles, deja sitio al borde de foco.
     func apply(multiple: Bool, active: Bool, envColor: NSColor?) {
-        let m: CGFloat = multiple ? 3 : 0
+        let m: CGFloat = multiple ? 4 : 5
         inset[0].constant = m; inset[1].constant = -m; inset[2].constant = m; inset[3].constant = -m
         layer?.borderWidth = multiple ? 1.5 : 0
+        layer?.backgroundColor = Settings.shared.theme.bgColor.cgColor
         let accent = envColor ?? Theme.accent
         layer?.borderColor = (active ? accent.withAlphaComponent(0.85) : NSColor.white.withAlphaComponent(0.07)).cgColor
         dim.isHidden = !(multiple && !active)
