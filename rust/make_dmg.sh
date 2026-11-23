@@ -45,7 +45,18 @@ VOL="jTerm $VERSION"
 RW="$(mktemp -u /tmp/jterm-rw.XXXXXX).dmg"
 rm -f "$OUT"
 hdiutil detach "/Volumes/$VOL" >/dev/null 2>&1 || true
-hdiutil create -volname "$VOL" -srcfolder "$STAGE" -ov -format UDRW -fs HFS+ "$RW" >/dev/null
+if ! hdiutil create -volname "$VOL" -srcfolder "$STAGE" -ov -format UDRW -fs HFS+ "$RW" >/dev/null 2>&1; then
+  # A veces macOS no puede crear imágenes con `hdiutil create` ("Recurso ocupado"; se arregla reiniciando). `makehybrid`
+  # sí funciona: el DMG resultante es válido y se instala igual, pero sin el fondo ni las posiciones de iconos.
+  echo "AVISO: hdiutil create falló; se genera un DMG sencillo (sin fondo ni posiciones de iconos)."
+  HYB="$(mktemp -u /tmp/jterm-hyb.XXXXXX).dmg"
+  hdiutil makehybrid -hfs -hfs-volume-name "$VOL" -o "$HYB" "$STAGE" >/dev/null
+  hdiutil convert "$HYB" -format UDZO -imagekey zlib-level=9 -o "$OUT" >/dev/null
+  rm -f "$HYB"
+  ( cd dist && shasum -a 256 "jTerm-$VERSION.dmg" > "jTerm-$VERSION.dmg.sha256" )
+  echo "Listo: $OUT ($(du -h "$OUT" | cut -f1))"
+  exit 0
+fi
 hdiutil attach "$RW" -noverify -noautoopen >/dev/null
 command -v SetFile >/dev/null && SetFile -a C "/Volumes/$VOL" || true
 if osascript <<OSA
