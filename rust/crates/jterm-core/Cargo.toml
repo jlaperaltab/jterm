@@ -1,0 +1,28 @@
+[package]
+name = "jterm-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Núcleo de jTerm sin interfaz: modelos, ajustes, cifrado, saltos SSH y guardas de comandos"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+aes-gcm = "0.10"
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+sha2 = "0.10"
+base64 = "0.22"
+rand = "0.8"
+regex = "1"
+thiserror = "2"
+hmac = "0.12"
+quick-xml = "0.37"
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+libc = "0.2.191"
+
+[dev-dependencies]
+tempfile = "3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "3"

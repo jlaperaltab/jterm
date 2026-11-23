@@ -1,0 +1,24 @@
+[package]
+name = "jterm-net"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Clientes de red de jTerm (AWS, S3) sobre un transporte HTTP intercambiable"
+
+[dependencies]
+bytes = "1.12.2"
+chrono = { version = "0.4.45", default-features = false, features = ["std", "clock"] }
+futures-util = "0.3.34"
+jterm-core = { path = "../jterm-core" }
+mime_guess = "2.0.5"
+plist = "1.10.4"
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "stream"] }
+serde_json = "1.0.154"
+sha2 = "0.11.1"
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["fs", "io-util", "rt", "macros", "time"] }
+tokio-util = { version = "0.7.20", features = ["io"] }
+uuid = "1.29.3"
+
+[dev-dependencies]
+tempfile = "3.27.0"

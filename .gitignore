@@ -3,3 +3,10 @@ build/
 dist/
 .DS_Store
 *.dmg
+
+# Rust
+rust/target/
+
+# Rust (empaquetado)
+rust/build/
+rust/dist/
