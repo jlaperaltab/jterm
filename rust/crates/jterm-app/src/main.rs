@@ -3386,6 +3386,9 @@ impl App {
             })
             .width(Length::Fill)
             .height(Length::Fill);
+            // Margen interior con el fondo del tema, para que el texto no quede pegado al borde.
+            let term_bg = self.palette.bg;
+            let view = container(view).padding(if multiple { 4.0 } else { 5.0 }).style(move |_| container::Style { background: Some(Background::Color(term_bg)), ..Default::default() });
             pane_grid::Content::new(view).style(move |_| container::Style {
                 border: Border { radius: 0.0.into(), width: if multiple { 1.5 } else { 0.0 }, color: if focused { Color { a: 0.8, ..accent } } else { Color { a: 0.12, ..Color::WHITE } } },
                 ..Default::default()

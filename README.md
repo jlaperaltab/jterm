@@ -48,7 +48,7 @@
 **Se actualiza solo**
 - *jTerm ▸ Buscar actualizaciones…* consulta los releases de este repositorio, verifica el SHA-256 del DMG, instala la nueva versión y se reabre.
 
-> **Aún no incluido** respecto a la versión anterior en Swift: la grabación de sesión (⌥⌘R) y la confirmación al pegar varias líneas.
+> **Aún no incluido** respecto a la versión anterior (en Swift, ya retirada): la grabación de sesión (⌥⌘R) y la confirmación al pegar varias líneas.
 
 ## ⌨️ Atajos
 
@@ -120,10 +120,7 @@ El proyecto es un workspace de Cargo en `rust/`:
 | `jterm-net` | Cliente HTTP real (`reqwest`) y actualizador, tras un trait `Transport` que permite probar sin red. |
 | `jterm-app` | La aplicación: interfaz con [`iced`](https://iced.rs), terminal, menú nativo y paneles. |
 
-La versión original en Swift sigue en `Sources/` y `Package.swift` como referencia; la app actual es la de `rust/`.
-
 ## 🙏 Créditos
 
 - [iced](https://iced.rs) y [alacritty_terminal](https://github.com/alacritty/alacritty), bajo licencias MIT y Apache-2.0.
 - [Lucide](https://lucide.dev) para los iconos.
-- [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) de Miguel de Icaza (MIT) en la versión Swift original, incluido en `Vendor/` con los cambios de [`JTERM_PATCH.md`](Vendor/SwiftTerm/JTERM_PATCH.md).
