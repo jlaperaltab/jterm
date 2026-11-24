@@ -2385,7 +2385,7 @@ dependencies = [
 
 [[package]]
 name = "jterm-app"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "alacritty_terminal",
  "chrono",
@@ -2406,7 +2406,7 @@ dependencies = [
 
 [[package]]
 name = "jterm-core"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
@@ -2428,7 +2428,7 @@ dependencies = [
 
 [[package]]
 name = "jterm-net"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "bytes",
  "chrono",
