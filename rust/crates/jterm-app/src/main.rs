@@ -2183,8 +2183,12 @@ impl App {
                     for (_, p) in tab.grid.iter_mut() {
                         if p.backend.take_dirty() {
                             p.cache.clear();
-                            if let Some(title) = p.backend.title() {
-                                p.title = title;
+                            // En sesiones remotas (SSH o instancia AWS) la pestaña conserva el nombre del servidor/instancia:
+                            // el título que envía la shell remota solo diría usuario@host y no permitiría ver a qué se está conectado.
+                            if !p.remote {
+                                if let Some(title) = p.backend.title() {
+                                    p.title = title;
+                                }
                             }
                         }
                         if p.backend.take_bell() && i != active {
