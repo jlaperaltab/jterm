@@ -467,6 +467,10 @@ impl SnippetForm {
 pub struct SnippetState {
     pub query: String,
     pub form: Option<SnippetForm>,
+    /// Comando que se está arrastrando para reordenar.
+    pub drag: Option<Uuid>,
+    /// Fila sobre la que está el cursor durante el arrastre (destino del soltado).
+    pub over: Option<Uuid>,
 }
 
 pub const SEARCH_ID: &str = "snippet-search";
@@ -502,7 +506,12 @@ pub fn snippets_view<'a>(items: Vec<&'a Snippet>, st: &'a SnippetState, p: &Pale
     if items.is_empty() {
         list = list.push(text(tr(if st.query.is_empty() { "Aún no hay comandos guardados." } else { "Sin resultados." })).size(12).color(dim));
     }
-    for s in items {
+    // Reordenar solo tiene sentido con la lista completa (sin filtro de búsqueda).
+    let reorder = st.query.trim().is_empty();
+    // Posiciones de origen y destino del arrastre, para dibujar la línea de inserción.
+    let pos = |id: Option<Uuid>| id.and_then(|id| items.iter().position(|s| s.id == id));
+    let (from, to) = (pos(st.drag), pos(st.over));
+    for (i, s) in items.iter().copied().enumerate() {
         let id = s.id;
         let title = s.title();
         let mut info: Column<Message> = column![text(title).size(13).color(fg)].spacing(1);
@@ -527,7 +536,30 @@ pub fn snippets_view<'a>(items: Vec<&'a Snippet>, st: &'a SnippetState, p: &Pale
                 border: Border { radius: 6.0.into(), ..Default::default() },
                 ..Default::default()
             });
-        list = list.push(row![pick, action_button("✎", dim, fg, false).on_press(Message::SnipEdit(id)), action_button("🗑", dim, fg, false).on_press(Message::SnipDelete(id))].spacing(2).align_y(iced::Alignment::Center));
+        let dragging = st.drag == Some(id);
+        let handle: Element<Message> = if reorder {
+            iced::widget::mouse_area(container(text("⠿").size(16).color(if dragging { accent } else { dim })).padding([4, 6]))
+                .on_press(Message::SnipDragStart(id))
+                .interaction(if st.drag.is_some() { iced::mouse::Interaction::Grabbing } else { iced::mouse::Interaction::Grab })
+                .into()
+        } else {
+            space::horizontal().width(Length::Shrink).into()
+        };
+        let line = row![handle, pick, action_button("✎", dim, fg, false).on_press(Message::SnipEdit(id)), action_button("🗑", dim, fg, false).on_press(Message::SnipDelete(id))].spacing(2).align_y(iced::Alignment::Center);
+        let line = container(line).style(move |_| container::Style {
+            background: dragging.then(|| Background::Color(Color { a: 0.10, ..accent })),
+            border: Border { radius: 6.0.into(), ..Default::default() },
+            ..Default::default()
+        });
+        // Línea de inserción: encima del destino al subir, debajo al bajar. Siempre ocupa su sitio para no mover la lista.
+        let bar = |on: bool| container(space::vertical().height(Length::Fixed(2.0))).width(Length::Fill).style(move |_| container::Style {
+            background: on.then(|| Background::Color(accent)),
+            ..Default::default()
+        });
+        let target = matches!((from, to), (Some(f), Some(t)) if f != t && t == i);
+        let below = matches!((from, to), (Some(f), Some(t)) if f < t);
+        let cell = column![bar(target && !below), line, bar(target && below)].spacing(0);
+        list = list.push(if reorder { iced::widget::mouse_area(cell).on_enter(Message::SnipDragOver(id)).into() } else { Element::from(cell) });
     }
     let body = column![
         row![text(tr("Comandos guardados")).size(16).color(fg), space::horizontal(), action_button("+ Nuevo", accent, fg, true).on_press(Message::SnipNew)].align_y(iced::Alignment::Center),
@@ -536,7 +568,8 @@ pub fn snippets_view<'a>(items: Vec<&'a Snippet>, st: &'a SnippetState, p: &Pale
         row![space::horizontal(), action_button("Cerrar", fg, fg, false).on_press(Message::ClosePanel)],
     ]
     .spacing(12);
-    dialog(body.into(), p, 520.0)
+    // Soltar en cualquier punto del diálogo termina el arrastre.
+    iced::widget::mouse_area(dialog(body.into(), p, 520.0)).on_release(Message::SnipDrop).into()
 }
 
 #[cfg(test)]

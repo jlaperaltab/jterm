@@ -20,10 +20,10 @@ pub enum UpdateDialog {
     Installing { progress: Arc<Mutex<String>> },
 }
 
-/// Segundos entre comprobaciones silenciosas al abrir la app.
-pub const CHECK_EVERY_SECS: u64 = 24 * 3600;
+/// Segundos entre comprobaciones silenciosas (al abrir y mientras la app sigue abierta).
+pub const CHECK_EVERY_SECS: u64 = 6 * 3600;
 
-/// ¿Toca comprobar al abrir? (`last` = instante Unix de la última comprobación; 0 = nunca)
+/// ¿Toca comprobar? (`last` = instante Unix de la última comprobación; 0 = nunca)
 pub fn due_for_launch_check(now_secs: u64, last: u64) -> bool {
     now_secs.saturating_sub(last) > CHECK_EVERY_SECS
 }
@@ -85,7 +85,7 @@ mod tests {
     #[test]
     fn launch_check_is_at_most_daily() {
         assert!(due_for_launch_check(1_000_000, 0));
-        assert!(!due_for_launch_check(1_000_000, 1_000_000 - 3600));
+        assert!(!due_for_launch_check(1_000_000, 1_000_000 - 600));
         assert!(due_for_launch_check(1_000_000, 1_000_000 - CHECK_EVERY_SECS - 1));
         assert!(!due_for_launch_check(10, 100), "un reloj atrasado no provoca comprobaciones");
     }

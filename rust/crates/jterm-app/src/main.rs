@@ -114,6 +114,9 @@ enum Message {
     SnipField(bool, String),
     SnipAutoRun(bool),
     SnipSave,
+    SnipDragStart(Uuid),
+    SnipDragOver(Uuid),
+    SnipDrop,
     SnipDelete(Uuid),
     SnipBack,
     // Archivos (SFTP)
@@ -436,6 +439,8 @@ struct App {
     update_busy: bool,
     update_found: Option<Release>,
     update_due: Option<Instant>,
+    /// Próximo momento en que se evalúa si toca una comprobación mientras la app sigue abierta.
+    update_probe: Instant,
     files: Option<FilesState>,
     sync: SyncCtl,
     tunnels: JsonList<Tunnel>,
@@ -498,6 +503,7 @@ fn boot() -> (App, Task<Message>) {
         update_busy: false,
         update_found: None,
         update_due: None,
+        update_probe: Instant::now() + Duration::from_secs(600),
         files: None,
         sync: SyncCtl::new(sync_prefs),
         tunnels: JsonList::open(data_dir.join("tunnels.json")),
@@ -2145,6 +2151,19 @@ impl App {
                         }
                     }
                 }
+                // La app suele quedarse abierta días: cada 10 min se revisa si ya toca comprobar (la comprobación real va cada CHECK_EVERY_SECS).
+                if Instant::now() >= self.update_probe {
+                    self.update_probe = Instant::now() + Duration::from_secs(600);
+                    if self.update_due.is_none()
+                        && !self.update_busy
+                        && self.update_found.is_none()
+                        && self.update_dialog.is_none()
+                        && self.bundle.as_ref().is_some_and(|b| b.repo.is_some())
+                        && update_ui::due_for_launch_check(now_unix(), self.last_update_check())
+                    {
+                        self.update_due = Some(Instant::now());
+                    }
+                }
                 if self.update_due.is_some_and(|d| Instant::now() >= d) {
                     self.update_due = None;
                     update_task = Some(self.update_check(false));
@@ -3100,6 +3119,31 @@ impl App {
                 self.sync.touch();
                     self.sync.touch();
                     if let Some(Panel::Snippets(st)) = &mut self.panel { st.form = None }
+                }
+            }
+            Message::SnipDragStart(id) => {
+                if let Some(Panel::Snippets(st)) = &mut self.panel { st.drag = Some(id) }
+            }
+            // Durante el arrastre solo se marca el destino; el orden cambia al soltar.
+            Message::SnipDragOver(over) => {
+                if let Some(Panel::Snippets(st)) = &mut self.panel {
+                    if st.drag.is_some() { st.over = Some(over) }
+                }
+            }
+            Message::SnipDrop => {
+                if let Some(Panel::Snippets(st)) = &mut self.panel {
+                    let (drag, over) = (st.drag.take(), st.over.take());
+                    if let (Some(d), Some(o)) = (drag, over) {
+                        let items = &mut self.snippets.items;
+                        if let (Some(i), Some(j)) = (items.iter().position(|s| s.id == d), items.iter().position(|s| s.id == o)) {
+                            if i != j {
+                                let it = items.remove(i);
+                                items.insert(j, it);
+                                let _ = self.snippets.save();
+                                self.sync.touch();
+                            }
+                        }
+                    }
                 }
             }
             Message::SnipDelete(id) => {
