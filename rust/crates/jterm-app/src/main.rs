@@ -112,6 +112,7 @@ enum Message {
     SnipNew,
     SnipEdit(Uuid),
     SnipField(bool, String),
+    SnipEditor(iced::widget::text_editor::Action),
     SnipAutoRun(bool),
     SnipSave,
     SnipDragStart(Uuid),
@@ -3100,8 +3101,11 @@ impl App {
             }
             Message::SnipField(is_command, v) => {
                 if let Some(Panel::Snippets(SnippetState { form: Some(f), .. })) = &mut self.panel {
-                    if is_command { f.command = v } else { f.name = v }
+                    if !is_command { f.name = v }
                 }
+            }
+            Message::SnipEditor(a) => {
+                if let Some(Panel::Snippets(SnippetState { form: Some(f), .. })) = &mut self.panel { f.command.perform(a) }
             }
             Message::SnipAutoRun(b) => {
                 if let Some(Panel::Snippets(SnippetState { form: Some(f), .. })) = &mut self.panel { f.auto_run = b }

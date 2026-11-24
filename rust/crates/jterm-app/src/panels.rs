@@ -436,25 +436,33 @@ pub fn settings_view<'a>(s: &'a Settings, page: Page, p: &Palette, accent: Color
     container(dialog(body.into(), p, 820.0)).height(Length::Fill).max_height(600.0).into()
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Default)]
 pub struct SnippetForm {
     pub id: Option<Uuid>,
     pub name: String,
-    pub command: String,
+    /// Editor multilínea: un comando puede tener varias líneas (scripts, heredocs…).
+    pub command: iced::widget::text_editor::Content,
     pub auto_run: bool,
 }
 
 impl SnippetForm {
     pub fn from(s: &Snippet) -> Self {
-        SnippetForm { id: Some(s.id), name: s.name.clone(), command: s.command.clone(), auto_run: s.auto_run }
+        SnippetForm { id: Some(s.id), name: s.name.clone(), command: iced::widget::text_editor::Content::with_text(&s.command), auto_run: s.auto_run }
+    }
+
+    /// Texto del comando sin el salto de línea final que añade el editor.
+    pub fn command_text(&self) -> String {
+        let t = self.command.text();
+        t.strip_suffix('\n').unwrap_or(&t).to_string()
     }
 
     /// El comando resultante, o `None` si no hay texto que guardar.
     pub fn build(&self) -> Option<Snippet> {
-        if self.command.trim().is_empty() {
+        let command = self.command_text();
+        if command.trim().is_empty() {
             return None;
         }
-        let mut s = Snippet::new(self.name.trim(), &self.command);
+        let mut s = Snippet::new(self.name.trim(), &command);
         if let Some(id) = self.id {
             s.id = id;
         }
@@ -463,7 +471,7 @@ impl SnippetForm {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Default)]
 pub struct SnippetState {
     pub query: String,
     pub form: Option<SnippetForm>,
@@ -471,6 +479,12 @@ pub struct SnippetState {
     pub drag: Option<Uuid>,
     /// Fila sobre la que está el cursor durante el arrastre (destino del soltado).
     pub over: Option<Uuid>,
+}
+
+/// Vista previa de una línea para el listado: recorta las líneas largas para que no desborden la fila.
+fn preview(line: &str) -> String {
+    const MAX: usize = 56;
+    if line.chars().count() > MAX { line.chars().take(MAX - 1).collect::<String>() + "…" } else { line.to_string() }
 }
 
 pub const SEARCH_ID: &str = "snippet-search";
@@ -487,7 +501,7 @@ pub fn snippets_view<'a>(items: Vec<&'a Snippet>, st: &'a SnippetState, p: &Pale
             .spacing(4),
             column![
                 text(tr("COMANDO")).size(10).color(dim),
-                text_input("sudo systemctl restart nginx", &f.command).on_input(|s| Message::SnipField(true, s)).on_submit(Message::SnipSave).padding(7).size(13).font(crate::term_view::FONT)
+                iced::widget::text_editor(&f.command).placeholder("sudo systemctl restart nginx").on_action(Message::SnipEditor).padding(7).size(13).font(crate::term_view::FONT).height(Length::Fixed(150.0))
             ]
             .spacing(4),
             checkbox(f.auto_run).label("Ejecutar al insertar (pulsa Retorno)").on_toggle(Message::SnipAutoRun).size(16).text_size(13),
@@ -517,7 +531,7 @@ pub fn snippets_view<'a>(items: Vec<&'a Snippet>, st: &'a SnippetState, p: &Pale
         let mut info: Column<Message> = column![text(title).size(13).color(fg)].spacing(1);
         let first = s.first_line();
         if !s.name.trim().is_empty() && !first.is_empty() {
-            info = info.push(text(first).size(11).font(crate::term_view::FONT).color(dim));
+            info = info.push(text(preview(&first)).size(11).font(crate::term_view::FONT).color(dim).wrapping(iced::widget::text::Wrapping::None));
         }
         let mut tags = row![].spacing(6);
         if s.auto_run {
@@ -526,7 +540,7 @@ pub fn snippets_view<'a>(items: Vec<&'a Snippet>, st: &'a SnippetState, p: &Pale
         if s.line_count() > 1 {
             tags = tags.push(text(tr(&format!("{} líneas", s.line_count()))).size(10).color(dim));
         }
-        let pick = iced::widget::button(row![info.width(Length::Fill), tags].align_y(iced::Alignment::Center).spacing(8))
+        let pick = iced::widget::button(row![container(info).width(Length::Fill).clip(true), tags].align_y(iced::Alignment::Center).spacing(8))
             .width(Length::Fill)
             .padding([6, 8])
             .on_press(Message::SnipInsert(id))
@@ -605,7 +619,7 @@ mod tests {
     fn snippet_form_builds_only_with_a_command() {
         let mut f = SnippetForm::default();
         assert!(f.build().is_none());
-        f.command = "ls -la".into();
+        f.command = iced::widget::text_editor::Content::with_text("ls -la");
         f.name = " listar ".into();
         f.auto_run = true;
         let s = f.build().unwrap();
